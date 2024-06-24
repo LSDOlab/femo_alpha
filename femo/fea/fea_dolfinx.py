@@ -11,7 +11,7 @@ from dolfinx.fem import (set_bc, Function, FunctionSpace, dirichletbc,
                         locate_dofs_topological, locate_dofs_geometrical,
                         Constant, VectorFunctionSpace)
 from ufl import (grad, SpatialCoordinate, CellDiameter, FacetNormal,
-                    div, Identity)
+                    div, Identity, derivative)
 import matplotlib.pyplot as plt
 from scipy.sparse import csr_matrix
 
@@ -85,7 +85,7 @@ class FEA(object):
         self.bc = []
 
         self.PDE_SOLVER = "Newton"
-        self.REPORT = True
+        self.REPORT = False
 
         self.ubc = None
         self.custom_solve = None
@@ -96,6 +96,9 @@ class FEA(object):
         self.record = False
         self.recorder_path = "records"
         self.linear_problem = False
+
+        self.nel = mesh.topology.index_map(mesh.topology.dim).size_local
+        self.nn = mesh.topology.index_map(0).size_local
 
     def add_input(self, name, function, init_val=1.0, record=False):
         if name in self.inputs_dict:
@@ -112,6 +115,8 @@ class FEA(object):
     def add_state(self, name, function, residual_form, arguments,
                     dR_du=None, dR_df_list=None, record=False):
 
+        if dR_du is None:
+            dR_du = derivative(residual_form, function)
         self.states_dict[name] = dict(
             function=function,
             residual_form=residual_form,
@@ -152,7 +157,7 @@ class FEA(object):
         partials = []
         self.outputs_field_dict[name] = dict(
             form=form,
-            func=output_func,
+            function=output_func,
             shape=len(getFuncArray(output_func)),
             arguments=arguments,
             partials=partials,
