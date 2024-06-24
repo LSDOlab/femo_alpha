@@ -1,6 +1,6 @@
 # This file contains the class FEAModel, which is used to evaluate all of the FEA variables
-from femo.csdl_alpha_opt.state_operation import StateOperation
-from femo.csdl_alpha_opt.output_operation import OutputOperation, OutputFieldOperation
+from femo_alpha.csdl_alpha_opt.state_operation import StateOperation
+from femo_alpha.csdl_alpha_opt.output_operation import OutputOperation, OutputFieldOperation
 import csdl_alpha as csdl
 
 class FEAModel():

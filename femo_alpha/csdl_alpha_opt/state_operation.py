@@ -1,4 +1,4 @@
-from femo.fea.fea_dolfinx import (FEA, update, getFuncArray, computePartials, 
+from femo_alpha.fea.fea_dolfinx import (FEA, update, getFuncArray, computePartials, 
                                   assembleMatrix, computeMatVecProductFwd, 
                                   computeMatVecProductBwd, createFunction,
                                   assembleSystem, setUpKSP_MUMPS)

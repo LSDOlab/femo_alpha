@@ -5,10 +5,10 @@ import ufl
 import numpy as np
 
 
-from femo.fea.fea_dolfinx import FEA
-from femo.fea.utils_dolfinx import createCustomMeasure
-from femo.rm_shell.rm_shell_pde import RMShellPDE
-from femo.csdl_alpha_opt.fea_model import FEAModel
+from femo_alpha.fea.fea_dolfinx import FEA
+from femo_alpha.fea.utils_dolfinx import createCustomMeasure
+from femo_alpha.rm_shell.rm_shell_pde import RMShellPDE
+from femo_alpha.csdl_alpha_opt.fea_model import FEAModel
 
 class RMShellModel:
     '''

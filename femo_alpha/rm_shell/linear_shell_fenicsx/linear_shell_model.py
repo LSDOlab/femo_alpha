@@ -19,9 +19,9 @@ from ufl import (VectorElement, MixedElement, dx, indices, as_tensor, as_vector,
                     CellDiameter, CellNormal, FacetNormal, sym, cross,
                     Jacobian, as_matrix, inv)
 
-from femo.rm_shell.linear_shell_fenicsx.kinematics import (J, F, gradx, voigt2D, 
+from femo_alpha.rm_shell.linear_shell_fenicsx.kinematics import (J, F, gradx, voigt2D, 
                     gradv_local, global_to_local_inplane, local_basis_inplane,)
-from femo.rm_shell.linear_shell_fenicsx.utils import project
+from femo_alpha.rm_shell.linear_shell_fenicsx.utils import project
 
 class ShellElement():
 

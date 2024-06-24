@@ -10,12 +10,12 @@ import scipy.sparse as sp
 import numpy as np
 from ufl import TestFunction, TrialFunction, dx, inner, CellDiameter, dot, grad
 
-from femo.rm_shell.linear_shell_fenicsx.linear_shell_model import (ShellElement,
+from femo_alpha.rm_shell.linear_shell_fenicsx.linear_shell_model import (ShellElement,
                                                                     ShellStressRM,
                                                                     MaterialModel,
                                                                     ElasticModelShapeOpt)
-from femo.rm_shell.linear_shell_fenicsx.utils import computeNodalDisp
-from femo.rm_shell.linear_shell_fenicsx.kinematics import J
+from femo_alpha.rm_shell.linear_shell_fenicsx.utils import computeNodalDisp
+from femo_alpha.rm_shell.linear_shell_fenicsx.kinematics import J
 
 
 class RMShellPDE:

@@ -11,8 +11,8 @@ from mpi4py import MPI
 import csdl_alpha as csdl
 import numpy as np
 
-from femo.rm_shell.rm_shell_model import RMShellModel
-from femo.fea.utils_dolfinx import createCustomMeasure
+from femo_alpha.rm_shell.rm_shell_model import RMShellModel
+from femo_alpha.fea.utils_dolfinx import createCustomMeasure
 
 run_verify_forward_eval = True
 run_check_derivatives = False

@@ -1,4 +1,4 @@
-from femo.fea.fea_dolfinx import FEA, update, assemble, computePartials, getFuncArray
+from femo_alpha.fea.fea_dolfinx import FEA, update, assemble, computePartials, getFuncArray
 import csdl_alpha as csdl
 import numpy as np
 

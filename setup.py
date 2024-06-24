@@ -7,11 +7,10 @@ def read(fname):
     return codecs.open(os.path.join(base_dir, fname), encoding="utf-8").read()
 
 setup(
-    name='femo',
+    name='femo_alpha',
     version='0.1',
     packages=find_packages(),
-    #packages=['fe_csdl_opt'],
-    url='https://github.com/RuruX/femo',
+    url='https://github.com/LSDOlab/femo_alpha',
     license='GNU LGPLv3',
     author='Ru Xiang',
     author_email='rxiang@ucsd.edu',

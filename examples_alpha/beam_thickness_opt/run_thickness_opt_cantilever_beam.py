@@ -14,8 +14,8 @@ from matplotlib import pyplot as plt
 import basix
 
 
-from femo.fea.fea_dolfinx import *
-from femo.csdl_alpha_opt.fea_model import FEAModel
+from femo_alpha.fea.fea_dolfinx import *
+from femo_alpha.csdl_alpha_opt.fea_model import FEAModel
 
 run_verify_forward_eval = False
 run_check_derivatives = True
