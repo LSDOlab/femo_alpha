@@ -18,7 +18,7 @@ A general framework for using **F**inite **E**lement in PDE-constrained **M**ult
 
 # Installation
 
-The minimal requirements to use **femo_alpha** for modeling and simulation are `FEniCSx` and `CSDL_alpha`. For modeling and simulation of aircraft design applications, you may install [CADDEE_alpha](https://github.com/LSDOlab/CADDEE_alpha) to enable coupling with solvers of other disciplines; for optimization, you will also need [ModOpt](https://github.com/LSDOlab/modopt) on top of them for Python bindings of various state-of-the-art optimizers. 
+The minimal requirements to use **femo_alpha** for modeling and simulation are `FEniCSx` and `CSDL_alpha`. For modeling aircraft design applications, you may install [CADDEE_alpha](https://github.com/LSDOlab/CADDEE_alpha) to enable coupling with solvers of other disciplines; for optimization, you will also need [ModOpt](https://github.com/LSDOlab/modopt) on top of them for Python bindings of various state-of-the-art optimizers. 
 
 ## Installation instructions for users
 It's recommended to use conda for installing the module and its dependencies.
@@ -39,8 +39,6 @@ It's recommended to use conda for installing the module and its dependencies.
 - Install `CSDL_alpha` and `ModOpt` by
   ```sh
   pip install git+https://github.com/LSDOlab/CSDL_alpha.git
-  ```
-  ```sh
   pip install git+https://github.com/LSDOlab/modopt.git
   ```
 - Install `femo_alpha` by 
