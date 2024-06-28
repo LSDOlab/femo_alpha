@@ -47,6 +47,8 @@ def projectPointForce(f_array, target_func, dx_=dx, bcs=[]):
     solver.setOperators(A)
     solver.solve(b, target_func.vector)
 
+
+
 def project(v, target_func, bcs=[], lump_mass=False):
 
     """

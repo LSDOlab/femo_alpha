@@ -81,10 +81,11 @@ node_disp.value[:, 2] = 0.0 # z-displacement is zero for each
 
 
 shell_model = RMShellModel(mesh, shell_bc_func=ClampedBoundary, record=True)
-shell_outputs = shell_model.evaluate(force_vector, thickness, 
-                                        E, nu, density, 
-                                        node_disp,
-                                        debug_mode=False)
+shell_outputs = shell_model.evaluate(force_vector, 
+                                    thickness, 
+                                    E, nu, density, 
+                                    node_disp,
+                                    debug_mode=False)
 
 disp_solid = shell_outputs.disp_solid
 compliance = shell_outputs.compliance

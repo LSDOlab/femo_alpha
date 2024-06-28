@@ -2,7 +2,7 @@
 The FEniCS wrapper for variational forms and partial derivatives computation
 """
 
-from femo.fea.utils_dolfinx import *
+from femo_alpha.fea.utils_dolfinx import *
 from dolfinx.io import XDMFFile
 import ufl
 

@@ -125,6 +125,42 @@ class RMShellPDE:
     def compute_nodal_disp(self,func):
         return computeNodalDisp(func)
 
+
+    # def compute_sparse_mass_matrix(self):
+    #     # functions used to assemble FEA mass matrix
+    #     f_trial = TrialFunction(self.VT)
+    #     f_test = TestFunction(self.VT)
+
+    #     # assemble PETSc mass matrix
+    #     Mat_f = assemble_matrix(form(inner(f_test, f_trial)*dx))
+    #     Mat_f.assemble()
+
+    #     # convert mass matrix to sparse Python array
+    #     Mat_f_csr = Mat_f.getValuesCSR()
+    #     Mat_f_sp = sp.csr_matrix((Mat_f_csr[2], Mat_f_csr[1], Mat_f_csr[0]))
+
+    #     # eliminate zeros that are present in mass matrix
+    #     Mat_f_sp.eliminate_zeros()
+    #     return Mat_f_sp
+
+    def construct_force_to_pressure_map(self):
+        # Define variational problem for projection
+        w = TestFunction(self.VF)
+        Pv = TrialFunction(self.VF)
+
+        a = inner(Pv,w)*dx #lhs(res)
+        # Assemble linear system
+        A = assemble_matrix(form(a))
+        A.assemble()
+        # # convert mass matrix to sparse Python array
+        # A_csr = A.getValuesCSR()
+        # A_sp = sp.csr_matrix((A_csr[2], A_csr[1], A_csr[0]))
+
+        # # eliminate zeros that are present in mass matrix
+        # A_sp.eliminate_zeros()
+        return A
+    
+
     def construct_nodal_disp_map(self):
         deriv_us_to_ua_coord_list = []
         Q_map = self.construct_CG2_CG1_interpolation_map()
@@ -135,23 +171,6 @@ class RMShellPDE:
         disp_extraction_mats = sp.vstack(deriv_us_to_ua_coord_list)
         # print(disp_extraction_mats.shape)
         return disp_extraction_mats
-
-    def compute_sparse_mass_matrix(self):
-        # functions used to assemble FEA mass matrix
-        f_trial = TrialFunction(self.VT)
-        f_test = TestFunction(self.VT)
-
-        # assemble PETSc mass matrix
-        Mat_f = assemble_matrix(form(inner(f_test, f_trial)*dx))
-        Mat_f.assemble()
-
-        # convert mass matrix to sparse Python array
-        Mat_f_csr = Mat_f.getValuesCSR()
-        Mat_f_sp = sp.csr_matrix((Mat_f_csr[2], Mat_f_csr[1], Mat_f_csr[0]))
-
-        # eliminate zeros that are present in mass matrix
-        Mat_f_sp.eliminate_zeros()
-        return Mat_f_sp
 
     def construct_disp_extraction_mats(self):
         # first we construct the extraction matrix for all displacements

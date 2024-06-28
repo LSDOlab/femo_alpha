@@ -3,10 +3,10 @@ from dolfinx.fem import Function
 import csdl_alpha as csdl
 import ufl
 import numpy as np
-
+from mpi4py import MPI
 
 from femo_alpha.fea.fea_dolfinx import FEA
-from femo_alpha.fea.utils_dolfinx import createCustomMeasure
+from femo_alpha.fea.utils_dolfinx import createCustomMeasure, convertToDense
 from femo_alpha.rm_shell.rm_shell_pde import RMShellPDE
 from femo_alpha.csdl_alpha_opt.fea_model import FEAModel
 
@@ -146,11 +146,14 @@ class RMShellModel:
         
         self.fea = fea
         
-    def evaluate(self, force_vector: csdl.Variable, thickness: csdl.Variable,
-                    E: csdl.Variable, nu: csdl.Variable, density: csdl.Variable,
-                    node_disp: csdl.Variable=None,
-                    debug_mode=False) \
-                    -> csdl.VariableGroup:
+    def evaluate(self, force_vector: csdl.Variable, 
+                thickness: csdl.Variable,
+                E: csdl.Variable, 
+                nu: csdl.Variable, 
+                density: csdl.Variable,
+                node_disp: csdl.Variable=None,
+                debug_mode=False,
+                is_pressure=True) -> csdl.VariableGroup:
         """
         Parameters:
         ----------
@@ -176,18 +179,29 @@ class RMShellModel:
             > mass: the mass of the shell model
         """
         shell_inputs = csdl.VariableGroup()
-        shell_inputs.thickness = thickness
 
-        shell_inputs.E = E
-        shell_inputs.nu = nu
-        shell_inputs.density = density
+        #:::::::::::::::::::::: Prepare the inputs :::::::::::::::::::::::::::::
+        # sort the material properties based on FEniCS indices
+        fenics_mesh_indices = self.shell_pde.mesh.geometry.input_global_indices    
+        shell_inputs.thickness = thickness[fenics_mesh_indices]
+        shell_inputs.E = E[fenics_mesh_indices]
+        shell_inputs.nu = nu[fenics_mesh_indices]
+        shell_inputs.density = density[fenics_mesh_indices]
 
-        # Construct the shell model in CSDL
+        # reshape the force matrix to vector and sort indices
         force_reshaping_model = ForceReshapingModel(shell_pde=self.shell_pde)
         reshaped_force = force_reshaping_model.evaluate(force_vector)
         reshaped_force.add_name('F_solid')
-        shell_inputs.F_solid = reshaped_force
 
+        if is_pressure:
+            shell_inputs.F_solid = reshaped_force
+        else:
+            # Compute nodal pressures based on forces
+            A = self.shell_pde.construct_force_to_pressure_map()
+            pressure = csdl.solve_linear(convertToDense(A), reshaped_force)
+            shell_inputs.F_solid = pressure
+
+        # sort the nodal mesh deformation based on FEniCS indices
         if node_disp is None:
             node_disp = csdl.Variable(value=0.0, shape=force_vector.shape, 
                                       name='node_disp')
@@ -195,9 +209,13 @@ class RMShellModel:
         reshaped_node_disp.add_name('uhat')
         shell_inputs.uhat = reshaped_node_disp
 
+        #:::::::::::::::::::::: Evaluate the model :::::::::::::::::::::::::::::
+        # Evaluate the shell model
         print('Evaluating the RM shell model ...')
         solid_model = FEAModel(fea=[self.fea], fea_name='rm_shell')
         shell_outputs = solid_model.evaluate(shell_inputs, debug_mode=debug_mode)
+
+        #:::::::::::::::::::::: Postprocess the outputs ::::::::::::::::::::::::
         disp_extraction_model = DisplacementExtractionModel(shell_pde=self.shell_pde)
         disp_extracted = disp_extraction_model.evaluate(shell_outputs.disp_solid)
         disp_extracted.add_name('disp_extracted')
@@ -212,7 +230,6 @@ class RMShellModel:
         print("-"*40)
         return shell_outputs
 
-        
 class AggregatedStressModel:
     '''
     Compute the aggregated stress
@@ -240,7 +257,7 @@ class DisplacementExtractionModel:
         shape = shell_pde.mesh.geometry.x.shape
         # contains nodal displacements only (CG1)
         nodal_disp_vec = csdl.sparse.matvec(disp_extraction_mats, disp_vec)
-        nodal_disp_mat = csdl.reshape(nodal_disp_vec, shape=(shape[0],shape[1]))
+        nodal_disp_mat = csdl.transpose(csdl.reshape(nodal_disp_vec, shape=(shape[1],shape[0])))
 
         # reorder the matrix to match the importing mesh node indices
         # FEniCS --> CADDEE
