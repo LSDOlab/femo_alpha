@@ -9,8 +9,7 @@ and add the example files directly into the toctree of the main
 examples page.
 
 ```{toctree}
-:maxdepth: 1
+:maxdepth: 3
 
-../_temp/examples/advanced_examples/ex_3quartic_opt_modopt
-../_temp/examples/advanced_examples/ex_5modularity_NewtonLagrange
+../_temp/examples/advanced_examples/pav_shell_opt/ex_pav_shell_w_caddee
 ```

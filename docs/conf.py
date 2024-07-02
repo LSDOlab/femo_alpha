@@ -16,11 +16,10 @@
 
 # -- Project information -----------------------------------------------------
 
-project = 'FEMO'
-copyright = '2023, Ru Xiang'
+project = 'femo_alpha'
+copyright = '2024, Ru Xiang'
 author = 'Ru Xiang'
 version = '0.1'
-# release = 0.1.0rtc
 
 
 # -- General configuration ---------------------------------------------------
@@ -50,7 +49,7 @@ nb_execution_mode = 'off'
 # autodoc_typehints = 'description'
 
 # autoapi options
-autoapi_dirs = ["../femo"]
+autoapi_dirs = ["../femo_alpha"]
 autoapi_root = 'src/autoapi'
 autoapi_type = 'python'
 autoapi_file_patterns = ['*.py', '*.pyi']

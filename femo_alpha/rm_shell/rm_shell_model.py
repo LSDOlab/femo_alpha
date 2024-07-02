@@ -13,14 +13,12 @@ from femo_alpha.csdl_alpha_opt.fea_model import FEAModel
 class RMShellModel:
     '''
     Class for the RM shell model for aircraft optimization
-    --------------------------------
+    ------------------------------------------------------
     Args:
     mesh: dolfinx.mesh object for the shell mesh
     shell_bc_func: callable for shell Dirichlet BC locations - returns True if 
                     it is the boundary location, otherwise returns False
     record: boolean to record the FEA model variables in xdmf format
-
-    --------------------------------
     '''
     def __init__(self, mesh: dolfinx.mesh, 
                             shell_bc_func: callable=None, 
@@ -124,19 +122,15 @@ class RMShellModel:
                         arguments=['thickness','F_solid',
                                     'E','nu','uhat'])
         fea.add_output(name='compliance',
-                        type='scalar',
                         form=compliance_form,
                         arguments=['disp_solid','F_solid','thickness','uhat'])
         fea.add_output(name='mass',
-                        type='scalar',
                         form=mass_form,
                         arguments=['thickness','density','uhat'])
         fea.add_output(name='elastic_energy',
-                        type='scalar',
                         form=elastic_energy_form,
                         arguments=['thickness','disp_solid', 'E','uhat'])
         fea.add_output(name='pnorm_stress',
-                        type='scalar',
                         form=pnorm_stress_form,
                         arguments=['thickness','disp_solid','E', 'nu','uhat'])
         fea.add_field_output(name='stress',
@@ -156,7 +150,7 @@ class RMShellModel:
                 is_pressure=True) -> csdl.VariableGroup:
         '''
         Parameters:
-        ----------
+        -----------
         Vector csdl.Variable:
             > force_vector: the force vector applied on the shell mesh nodes
             > thickness: the thickness on the shell mesh nodes
@@ -165,8 +159,7 @@ class RMShellModel:
             > density: the density on the shell mesh nodes
 
         Returns:
-        ----------
-        shell_outputs: csdl.VariableGroup that contains the outputs of the shell model
+        --------
         Vector csdl.Variable:
             > disp_solid: the displacements (3 translational dofs, 3 rotation dofs)
                             on the shell mesh nodes

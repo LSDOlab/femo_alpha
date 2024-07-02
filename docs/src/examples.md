@@ -10,7 +10,7 @@ If no classification of examples is required, just remove the subpages for examp
 and add the example files directly into the toctree of this main examples page.
 
 ```{toctree}
-:maxdepth: 2
+:maxdepth: 3
 :caption: List of examples
 :titlesonly:
 :numbered:

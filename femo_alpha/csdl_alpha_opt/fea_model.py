@@ -8,11 +8,10 @@ class FEAModel():
         self.parameters = {'fea': fea, 'fea_name': fea_name}
 
     def evaluate(self, inputs: csdl.VariableGroup, debug_mode=False):
-        """
+        '''
         Evaluate all of the FEA variables
-
         Parameters:
-        ----------
+        -----------
         inputs (dict): A dictionary of input variables (csdl.Variable).
         debug_mode (bool, optional): If set to True, the debug mode is enabled. 
                                     Defaults to False.
@@ -21,15 +20,13 @@ class FEAModel():
         --------
         fea_variable_dict (dict): A dictionary of the FEA variables 
                                     including inputs, states, and outputs.
-        """
+        '''
 
         self.fea_list = fea_list = self.parameters['fea']
         fea_name = self.parameters['fea_name']
 
         # construct output of the model
         fea_variable_dict = inputs
-
-        # with csdl.namespace(fea_name):
         # loop over the FEA list (there could be multiple FEA objects for coupled PDEs)
         for fea in fea_list:
             for state_name in fea.states_dict:

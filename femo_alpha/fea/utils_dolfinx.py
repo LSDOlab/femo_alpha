@@ -1,7 +1,6 @@
-"""
+'''
 Utility functions for the PETSc and UFL operations
-"""
-
+'''
 import dolfinx
 from dolfinx.io import XDMFFile
 from ufl import (Identity, dot, derivative, TestFunction, TrialFunction,
@@ -32,19 +31,19 @@ DOLFIN_EPS = 3E-16
 comm = MPI.COMM_WORLD
 
 
-def readFEAMesh(meshFile, format="HDF"):
-    """
+def readFEAMesh(meshFile, format='HDF'):
+    '''
     Reads mesh from input meshFile, optionally display statistics
-    """
+    '''
 
-    if format == "HDF": # recommended format
+    if format == 'HDF': # recommended format
         # both xmdf and h5 files are available
-        with dolfinx.io.XDMFFile(MPI.COMM_SELF, meshFile, "r") as xdmf:
-            mesh = xdmf.read_mesh(name="Grid")
-    elif format == "XML": # it needs to have lxml module installed
+        with dolfinx.io.XDMFFile(MPI.COMM_SELF, meshFile, 'r') as xdmf:
+            mesh = xdmf.read_mesh(name='Grid')
+    elif format == 'XML': # it needs to have lxml module installed
         # only xdmf file is available
-        with dolfinx.io.XDMFFile(MPI.COMM_SELF, meshFile, "r", encoding=XDMFFile.Encoding.ASCII) as xdmf:
-            mesh = xdmf.read_mesh(name="Grid")
+        with dolfinx.io.XDMFFile(MPI.COMM_SELF, meshFile, 'r', encoding=XDMFFile.Encoding.ASCII) as xdmf:
+            mesh = xdmf.read_mesh(name='Grid')
     else:
         raise ValueError("Invalid mesh file type. Must be 'HDF' or 'XML'")
 
@@ -52,87 +51,87 @@ def readFEAMesh(meshFile, format="HDF"):
 
 
 def gradx(f,uhat):
-    """
+    '''
     Convert the differential operation from the reference domain
     to the measure in the deformed configuration based on the mesh
     movement of `uhat`
-    --------------------------
+
     f: DOLFINx function for the solution of the physical problem
     uhat: DOLFIN function for mesh movements
-    """
+    '''
     return dot(grad(f), inv(F(uhat)))
 
 
 def J(uhat):
-    """
+    '''
     Compute the determinant of the deformation gradient used in the
     integration measure of the deformed configuration wrt the the
     reference configuration.
-    ---------------------------
+
     uhat: DOLFINx function for mesh movements
-    """
+    '''
     return det(F(uhat))
 
 def F(uhat):
-    """
+    '''
     Compute the determinant of the deformation gradient used in the
     integration measure of the deformed configuration wrt the the
     reference configuration.
-    ---------------------------
+    
     uhat: DOLFINx function for mesh movements
-    """
+    '''
     order = uhat.function_space.mesh.topology.dim
     I = Identity(order) 
     return I + grad(uhat)
 
 # The dolfinx version for mesh importer from msh2xdmf module
 def import_mesh(
-        prefix="mesh",
+        prefix='mesh',
         subdomains=False,
         dim=2,
-        directory=".",
+        directory='.',
 ):
-    """Function importing a dolfinx mesh.
+    '''Function importing a dolfinx mesh.
 
     Arguments:
         prefix (str, optional): mesh files prefix (eg. my_mesh.msh,
-            my_mesh_domain.xdmf, my_mesh_bondaries.xdmf). Defaults to "mesh".
+            my_mesh_domain.xdmf, my_mesh_bondaries.xdmf). Defaults to 'mesh'.
         subdomains (bool, optional): True if there are subdomains. Defaults to
             False.
         dim (int, optional): dimension of the domain. Defaults to 2.
-        directory (str, optional): directory of the mesh files. Defaults to ".".
+        directory (str, optional): directory of the mesh files. Defaults to '.'.
 
     Output:
         - dolfinx Mesh object containing the domain;
         - dolfinx MeshFunction object containing the physical lines (dim=2) or
             surfaces (dim=3) defined in the msh file and the sub-domains;
         - association table
-    """
+    '''
     # Set the file name
-    domain = "{}_domain.xdmf".format(prefix)
-    boundaries = "{}_boundaries.xdmf".format(prefix)
+    domain = '{}_domain.xdmf'.format(prefix)
+    boundaries = '{}_boundaries.xdmf'.format(prefix)
 
     # Import the converted domain
     with XDMFFile(MPI.COMM_WORLD,
-                    "{}/{}".format(directory, domain), "r") as xdmf:
-        mesh = xdmf.read_mesh(name="Grid")
+                    '{}/{}'.format(directory, domain), 'r') as xdmf:
+        mesh = xdmf.read_mesh(name='Grid')
         tdim = mesh.topology.dim
         mesh.topology.create_connectivity(tdim-1, tdim)
     # Import the boundaries
     with XDMFFile(MPI.COMM_WORLD,
-                    "{}/{}".format(directory, boundaries), "r") as xdmf:
-        boundaries_mf = xdmf.read_meshtags(mesh, "Grid")
+                    '{}/{}'.format(directory, boundaries), 'r') as xdmf:
+        boundaries_mf = xdmf.read_meshtags(mesh, 'Grid')
     # Import the subdomains
     if subdomains:
         with XDMFFile(MPI.COMM_WORLD,
-                        "{}/{}".format(directory, domain), "r") as xdmf:
+                        '{}/{}'.format(directory, domain), 'r') as xdmf:
             subdomains_mf = xdmf.read_meshtags(mesh, 'Grid')
     # Import the association table
-    association_table_name = "{}/{}_{}".format(
-        directory, prefix, "association_table.ini")
+    association_table_name = '{}/{}_{}'.format(
+        directory, prefix, 'association_table.ini')
     file_content = ConfigParser()
     file_content.read(association_table_name)
-    association_table = dict(file_content["ASSOCIATION TABLE"])
+    association_table = dict(file_content['ASSOCIATION TABLE'])
     # Convert the value from string to int
     for key, value in association_table.items():
         association_table[key] = int(value)
@@ -144,72 +143,72 @@ def import_mesh(
 
 
 def findNodeIndices(node_coordinates, coordinates):
-    """
+    '''
     Find the indices of the closest nodes, given the `node_coordinates`
     for a set of nodes and the `coordinates` for all of the vertices
     in the mesh, by using scipy.spatial.KDTree
-    """
+    '''
     tree = KDTree(coordinates)
     dist, node_indices = tree.query(node_coordinates)
     return node_indices
 
 def createUnitSquareMesh(n):
-    """
+    '''
     Create unit square mesh for test purposes
-    """
+    '''
     return create_unit_square(MPI.COMM_WORLD, n, n)
 
 def createIntervalMesh(n, x0, x1):
-    """
+    '''
     Create interval mesh for test purposes
-    """
+    '''
     return create_interval(MPI.COMM_WORLD, n, [x0, x1])
 
 def createRectangleMesh(pt1,pt2,nx,ny):
-    """
+    '''
     Create rectangle mesh for test purposes
-    """
+    '''
     return create_rectangle(MPI.COMM_WORLD, [pt1, pt2], [nx,ny],
                             cell_type=CellType.quadrilateral)
 
 def getFuncArray(v):
-    """
+    '''
     Compute the array representation of the Function
-    """
+    '''
     return v.vector.getArray()
 
 def setFuncArray(v, v_array):
-    """
+    '''
     Set the fuction based on the array
-    """
+    '''
     v.vector[:] = v_array
     v.vector.assemble()
     v.vector.ghostUpdate()
 
 def assembleScalar(c):
-    """
+    '''
     Compute the array representation of the scalar form
-    """
+    '''
     return assemble_scalar(form(c))
 
 def assembleVector(v):
-    """
+    '''
     Compute the array representation of the vector form
-    """
+    '''
     return assemble_vector(form(v)).array
 
 def assembleMatrix(M, bcs=[]):
-    """
+    '''
     Compute the array representation of the matrix form
-    """
+    '''
     M_ = assemble_matrix(form(M), bcs=bcs)
     M_.assemble()
     return M_
 
 def assembleSystem(J, F, bcs=[]):
-    """
+    '''
     Compute the array representations of the linear system
-    """
+    '''
     a = form(J)
     L = form(F)
     A = assemble_matrix(a, bcs=bcs)
@@ -230,22 +229,22 @@ def assemble(f, dim=0, bcs=[]):
         M = assembleMatrix(f, bcs=bcs)
         return convertToDense(M.copy())
     else:
-        return TypeError("Invalid type for assembly.")
+        return TypeError('Invalid type for assembly.')
 
 
 def assemble_partials(of=None, wrt=None, dim=1):
-    """
+    '''
     util method for assembling the partial derivative matrices for
     education or verification.
-    """
+    '''
     partials = derivative(of, wrt)
     return assemble(partials, dim=dim)
 
 
 def errorNorm(v, v_ex, norm='L2'):
-    """
+    '''
     Calculate the L2 norm of two functions
-    """
+    '''
     comm = MPI.COMM_WORLD
     l2_error = (v - v_ex)**2 * dx
     if norm == 'L2':
@@ -259,26 +258,26 @@ def errorNorm(v, v_ex, norm='L2'):
 
 ##### Linear algebra
 def transpose(A):
-    """
+    '''
     Transpose for matrix of DOLFIN type
-    """
+    '''
     return A.transpose(PETSc.Mat(MPI.COMM_WORLD))
 
 from scipy.sparse import csr_matrix
 def convertToCOO(A):
-    """
+    '''
     Convert a PETSc matrix to scipy.coo Matrix
-    """
+    '''
     A_csr = csr_matrix(A.getValuesCSR()[::-1], shape=A.size)
 
     return A_csr.tocoo()
 
 def computeMatVecProductFwd(A, x):
-    """
+    '''
     Compute y = A * x
     A: PETSc matrix
     x: ufl function
-    """
+    '''
     y = A*x.vector
     y.assemble()
     return y.getArray()
@@ -293,11 +292,11 @@ def applyBC(res, u, bcs):
     return b.array
 
 def computeMatVecProductBwd(A, R):
-    """
+    '''
     Compute y = A.T * R
     A: PETSc matrix
     R: ufl function
-    """
+    '''
     row, col = A.getSizes()
     y = PETSc.Vec().create()
     y.setSizes(col)
@@ -308,23 +307,23 @@ def computeMatVecProductBwd(A, R):
 
 
 def convertToDense(A_petsc):
-    """
+    '''
     Convert the PETSc matrix to a dense numpy array
     (super unefficient, only used for debugging purposes)
-    """
+    '''
     A_petsc.assemble()
-    A_dense = A_petsc.convert("dense")
+    A_dense = A_petsc.convert('dense')
     return A_dense.getDenseArray()
 
 
 def update(v, v_values):
-    """
+    '''
     Update the nodal values in every dof of the DOLFIN function `v`
     according to `v_values`.
-    -------------------------
+    
     v: dolfin function
     v_values: numpy array
-    """
+    '''
     if len(v_values) == 1:
         v.vector.set(v_values)
     else:
@@ -347,10 +346,10 @@ def solveNonlinear(res, func, bc, solver, report, initialize):
     elif solver == 'SNES':
         snes_solver = SNESSolver(res, func, bc, report=report)
         snes_solver.solve(None, func.vector)
-        print("Converged reason:", snes_solver.getConvergedReason())
+        print('Converged reason:', snes_solver.getConvergedReason())
     stop = default_timer()
     if report is True:
-        print("Solve nonlinear finished in ",stop-start, "seconds")
+        print('Solve nonlinear finished in ',stop-start, 'seconds')
 
 
 class NonlinearSNESProblem:
@@ -387,7 +386,7 @@ class NonlinearSNESProblem:
         set_bc(b, self.bcs, x, -1.0)
 
     def J(self, snes, x, J, P):
-        """Assemble Jacobian matrix."""
+        '''Assemble Jacobian matrix.'''
         J.zeroEntries()
         assemble_matrix(J, self.a, bcs=self.bcs)
         J.assemble()
@@ -398,9 +397,9 @@ def SNESSolver(F, w, bcs=[],
                     rel_tol=1e-13,
                     max_it=100,
                     report=False):
-    """
+    '''
     https://github.com/FEniCS/dolfinx/blob/main/python/test/unit/nls/test_newton.py#L182-L205
-    """
+    '''
     # Create nonlinear problem
 
     problem = NonlinearSNESProblem(F, w, bcs)
@@ -416,15 +415,15 @@ def SNESSolver(F, w, bcs=[],
     # Ru: the choice of damping parameter seems to be mesh dependent;
     # for the fine motor mesh, it is 0.8; for the coarse mesh, it is 0.61.
     # opts['snes_linesearch_damping'] = 0.8
-    opts["error_on_nonconvergence"] = True
+    opts['error_on_nonconvergence'] = True
     if report is True:
         # dolfinx.log.set_log_level(dolfinx.log.LogLevel.INFO)
         opts['snes_monitor'] = None
         opts['snes_linesearch_monitor'] = None
     snes.setTolerances(atol=abs_tol, rtol=rel_tol, max_it=max_it)
-    snes.getKSP().setType("preonly")
+    snes.getKSP().setType('preonly')
     snes.getKSP().setTolerances(atol=abs_tol,rtol=rel_tol)
-    snes.getKSP().getPC().setType("lu")
+    snes.getKSP().getPC().setType('lu')
     snes.getKSP().getPC().setFactorSolverType('mumps')
 
 
@@ -444,10 +443,10 @@ def NewtonSolver(F, w, bcs=[],
                     error_on_nonconvergence=False,
                     report=False):
 
-    """
+    '''
     Wrap up the nonlinear solver for the problem F(w)=0 and
     returns the solution
-    """
+    '''
     problem = NonlinearProblem(F, w, bcs)
     # Set the initial guess of the solution
     if initialize is True:
@@ -464,14 +463,14 @@ def NewtonSolver(F, w, bcs=[],
     solver.max_it = max_it
     solver.error_on_nonconvergence = error_on_nonconvergence
     opts = PETSc.Options()
-    opts["nls_solve_pc_factor_mat_solver_type"] = "mumps"
+    opts['nls_solve_pc_factor_mat_solver_type'] = 'mumps'
 
     return solver
 
 def solveKSP(A, b, x):
-    """
+    '''
     Wrap up the KSP solver for the linear system Ax=b
-    """
+    '''
     ######### Set up the KSP solver ###############
 
     ksp = PETSc.KSP().create(A.getComm())
@@ -479,14 +478,14 @@ def solveKSP(A, b, x):
 
     # additive Schwarz method
     pc = ksp.getPC()
-    pc.setType("asm")
+    pc.setType('asm')
 
     ksp.setFromOptions()
     ksp.setUp()
 
     localKSP = pc.getASMSubKSP()[0]
     localKSP.setType(PETSc.KSP.Type.GMRES)
-    localKSP.getPC().setType("lu")
+    localKSP.getPC().setType('lu')
     localKSP.setTolerances(1.0e-12)
     #ksp.setGMRESRestart(30)
     ksp.setConvergenceHistory()
@@ -494,18 +493,18 @@ def solveKSP(A, b, x):
     history = ksp.getConvergenceHistory()
 
 def solveKSP_mumps(A, b, x):
-    """
+    '''
     Implementation of KSP solution of the linear system Ax=b using MUMPS
-    """
+    '''
 
     # setup petsc for pre-only solve
     ksp = PETSc.KSP().create(A.getComm())
     ksp.setOperators(A)
-    ksp.setType("preonly")
+    ksp.setType('preonly')
 
     # set LU w/ MUMPS
     pc = ksp.getPC()
-    pc.setType("lu")
+    pc.setType('lu')
     pc.setFactorSolverType('mumps')
 
     # solve
@@ -513,18 +512,18 @@ def solveKSP_mumps(A, b, x):
     ksp.solve(b, x)
 
 def setUpKSP_MUMPS(A):
-    """
+    '''
     Implementation of KSP solution of the linear system Ax=b using MUMPS
-    """
+    '''
 
     # setup petsc for pre-only solve
     ksp = PETSc.KSP().create(A.getComm())
     ksp.setOperators(A)
-    ksp.setType("preonly")
+    ksp.setType('preonly')
 
     # set LU w/ MUMPS
     pc = ksp.getPC()
-    pc.setType("lu")
+    pc.setType('lu')
     pc.setFactorSolverType('mumps')
 
     # solve
@@ -554,7 +553,7 @@ def meshSize(mesh):
     return h
 
 def createCustomMeasure(mesh, dim, SubdomainFunc, measure: str, tag: int):
-    metadata = {"quadrature_degree":4}
+    metadata = {'quadrature_degree':4}
     if measure == 'ds':
         subdomain = locate_entities_boundary(mesh,dim,SubdomainFunc)
     else:
@@ -568,13 +567,13 @@ def createCustomMeasure(mesh, dim, SubdomainFunc, measure: str, tag: int):
 
 def project(v, target_func, bcs=[], lump_mass=False):
 
-    """
+    '''
     L2 projection of an UFL object (expression) to targeted function.
     Typically used for visualization in post-processing.
     `lump_mass` is an optional boolean argument set to be False by default;
     it's set to be True when lumping is needed for preventing oscillation
     when projecting discontinous data.
-    """
+    '''
 
     # Ensure we have a mesh and attach to measure
     V = target_func.function_space
@@ -603,22 +602,11 @@ def project(v, target_func, bcs=[], lump_mass=False):
         solver.solve(b, target_func.vector)
 
 
-
-def findNodeIndices(node_coordinates, coordinates):
-    """
-    Find the indices of the closest nodes, given the `node_coordinates`
-    for a set of nodes and the `coordinates` for all of the vertices
-    in the mesh, by using scipy.spatial.KDTree
-    """
-    tree = KDTree(coordinates)
-    dist, node_indices = tree.query(node_coordinates)
-    return node_indices
-
 # def locateDOFs(coords,V):
-#     """
+#     '''
 #     Find the indices of the dofs for setting up the boundary condition
 #     in the mesh motion subproblem
-#     """
+#     '''
 #     coordinates = V.tabulate_dof_coordinates()[:,:-1]
 #
 #     # Use KDTree to find the node indices of the points on the edge
@@ -636,10 +624,10 @@ def findNodeIndices(node_coordinates, coordinates):
 
 
 def locateDOFs(coords,V, input='polar'):
-    """
+    '''
     Find the indices of the dofs for setting up the boundary condition
     in the mesh motion subproblem
-    """
+    '''
     coords = np.reshape(coords[:], (-1,2))
     if input == 'polar':
         for i in range(coords.shape[0]):
@@ -665,7 +653,7 @@ import meshio
 def reconstructFEAMesh(filename, nodes, connectivity):
     # Generate cells (connectivity)
     # This is a placeholder, replace with your actual cell data
-    cells = [("quad", np.array(connectivity))]
+    cells = [('quad', np.array(connectivity))]
     # Write the mesh data to an XDMF file
     mesh = meshio.Mesh(nodes, cells)
     meshio.write(filename, mesh)

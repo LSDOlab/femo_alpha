@@ -1,10 +1,10 @@
-"""
+'''
 The ``utils`` module
 --------------------
 Contains problem-specific functionalities such as project higher-order dofs
 to a lower order function space (for plotting), and calculate the wing volume
 of an airplane model.
-"""
+'''
 
 import dolfinx
 import dolfinx.io
@@ -20,13 +20,13 @@ import numpy as np
 
 def projectPointForce(f_array, target_func, dx_=dx, bcs=[]):
 
-    """
+    '''
     L2 projection of an UFL object (expression) to targeted function.
     Typically used for visualization in post-processing.
     `lump_mass` is an optional boolean argument set to be False by default;
     it's set to be True when lumping is needed for preventing oscillation
     when projecting discontinous data.
-    """
+    '''
 
     # Ensure we have a mesh and attach to measure
     V = target_func.function_space
@@ -51,13 +51,13 @@ def projectPointForce(f_array, target_func, dx_=dx, bcs=[]):
 
 def project(v, target_func, bcs=[], lump_mass=False):
 
-    """
+    '''
     L2 projection of an UFL object (expression) to targeted function.
     Typically used for visualization in post-processing.
     `lump_mass` is an optional boolean argument set to be False by default;
     it's set to be True when lumping is needed for preventing oscillation
     when projecting discontinous data.
-    """
+    '''
 
     # Ensure we have a mesh and attach to measure
     V = target_func.function_space
@@ -89,7 +89,7 @@ def project(v, target_func, bcs=[], lump_mass=False):
 def calculateSurfaceArea(mesh, boundary):
 
     #try to integrate a subset of the domain:
-    Q = FunctionSpace(mesh, ("DG", 0))
+    Q = FunctionSpace(mesh, ('DG', 0))
     vq = TestFunction(Q)
     kappa = Function(Q)
     kappa.vector.setArray(np.ones(len(kappa.vector.getArray())))
@@ -105,7 +105,7 @@ def calculateSurfaceArea(mesh, boundary):
 def computeNodalDisp(u):
     V = u.function_space
     mesh = V.mesh
-    VCG1 = VectorFunctionSpace(mesh, ("CG", 1))
+    VCG1 = VectorFunctionSpace(mesh, ('CG', 1))
     u1 = Function(VCG1)
     u1.interpolate(u)
     uX = u1.sub(0).collapse().x.array
@@ -141,9 +141,9 @@ class Delta:
         return values
 
 class Delta_cpt:
-    """
+    '''
     Delta function on closest points
-    """
+    '''
     def __init__(self, x0, f_p, **kwargs):
         self.x0 = x0
         self.f_p = f_p
@@ -159,16 +159,16 @@ class Delta_cpt:
 
         closest_local = np.argsort(np.array(dist))[:4]
         print(closest_local)
-        print("applying forces to the closest point...")
+        print('applying forces to the closest point...')
         values[0][closest_local] = self.f_p[0]
         values[1][closest_local] = self.f_p[1]
         values[2][closest_local] = self.f_p[2]
         return values
 
 class Delta_mpt:
-    """
+    '''
     Multi-point delta function applied on the closest points
-    """
+    '''
     def __init__(self, x0, f_p, **kwargs):
         self.x0 = x0
         self.f_p = f_p
@@ -190,7 +190,7 @@ class Delta_mpt:
             closest_local = np.argsort(np.array(dist))[:4]
             print(np.array(dist)[closest_local])
             print(closest_local)
-            print("applying forces to the closest point...")
+            print('applying forces to the closest point...')
             values[0][closest_local] = f_p_j[0]
             values[1][closest_local] = f_p_j[1]
             values[2][closest_local] = f_p_j[2]
@@ -225,9 +225,9 @@ def sortIndex(old_ind, new_ind):
     return ind
 
 def applyNodalForces(f_array, mesh, W):
-    """
+    '''
     Applies input vertex forces to relevant DOF locations in force vector
-    """
+    '''
 
     # get vtx_to_dof map
     vtx_to_dof = getVertexToDofMap(W, mesh)
@@ -246,20 +246,20 @@ def applyNodalForces(f_array, mesh, W):
     return f1
 
 def getVertexToDofMap(W, mesh):
-    """
-    Returns the "vertex to DOF map" with shape [nVtx,dim] containing
+    '''
+    Returns the 'vertex to DOF map' with shape [nVtx,dim] containing
     the index of the DOF corresponding to each vertex/direction--used
     to directly map applied forces to force vector. This is not particularly
     straightforward but is more efficient than previous impelementations; see
     https://fenicsproject.discourse.group/t/application-of-point-forces-mapping-vertex-indices-to-corresponding-dofs/9646
     for more information
-    """
+    '''
    
     # extract the displacement subspace and associated dof_layout
     W0, W0_to_W = W.sub(0).collapse()
     dof_layout = W0.dofmap.dof_layout
 
-    # use vertex/cell/dof relationships to identify the "parent" DOF
+    # use vertex/cell/dof relationships to identify the 'parent' DOF
     # associated with each vertex
     num_vertices = mesh.topology.index_map(
         0).size_local + mesh.topology.index_map(0).num_ghosts
@@ -274,7 +274,7 @@ def getVertexToDofMap(W, mesh):
         for i, vertex in enumerate(vertices):
             vertex_to_par_dof_map[vertex] = dofs[dof_layout.entity_dofs(0, i)]
 
-    # using the "parent" DOF for each vertex and dofmap block size (bs),
+    # using the 'parent' DOF for each vertex and dofmap block size (bs),
     # find the actual DOF index for each vertex/direction
     geometry_indices = dolfinx.cpp.mesh.entities_to_geometry(
         mesh, 0, np.arange(num_vertices, dtype=np.int32), False)
@@ -288,10 +288,10 @@ def getVertexToDofMap(W, mesh):
     return vtx_to_dof
 
 def convertToDense(A_petsc):
-    """
+    '''
     Convert the PETSc matrix to a dense numpy array
     (super unefficient, only used for debugging purposes)
-    """
+    '''
     A_petsc.assemble()
-    A_dense = A_petsc.convert("dense")
+    A_dense = A_petsc.convert('dense')
     return A_dense.getDenseArray()

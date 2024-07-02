@@ -4,61 +4,66 @@ and running a minimal example.
 
 ## Installation
 
-### Installation instructions for users
-For direct installation with all dependencies, run on the terminal or command line
-```sh
-$ pip install git+https://github.com/LSDOlab/lsdo_project_template.git
-```
-If you want users to install a specific branch, run
-```sh
-$ pip install git+https://github.com/LSDOlab/lsdo_project_template.git@branch
-```
+The minimal requirements to use **femo_alpha** for modeling and simulation are `FEniCSx` and `CSDL_alpha`. For modeling aircraft design applications, you may install [CADDEE_alpha](https://github.com/LSDOlab/CADDEE_alpha) to enable coupling with solvers of other disciplines; for optimization, you will also need [ModOpt](https://github.com/LSDOlab/modopt) on top of them for Python bindings of various state-of-the-art optimizers. 
 
-**Enabled by**: Copying the `setup.py` file, changing your repository name and version, 
-and adding all your dependencies into the list `install_requires`.
+### Installation instructions
+It's recommended to use conda for installing the module and its dependencies.
 
-### Installation instructions for developers
-To install `lsdo_project_template`, first clone the repository and install using pip.
-On the terminal or command line, run
-```sh
-$ git clone https://github.com/LSDOlab/lsdo_project_template.git
-$ pip install -e ./lsdo_project_template
-```
-**Enabled by**: Copying the setup.py file, and changing your repository name and version.
+- Create a conda environment for `femo` with a specific Python version (Python 3.9) that is compatible with all of the dependencies
+  ```sh
+  conda create -n femo python=3.9.10
+  ```
+  (Python 3.9.7 also works if Python 3.9.10 is unavailable in your conda)
+- Activate the conda enviroment 
+  ```sh
+  conda activate femo
+  ```
+- Install the latest FEniCSx by `conda-forge`
+  ```sh
+  conda install -c conda-forge fenics-dolfinx=0.5.1
+  ```
+- Install `CSDL_alpha` and `ModOpt` by
+  ```sh
+  pip install git+https://github.com/LSDOlab/CSDL_alpha.git
+  pip install git+https://github.com/LSDOlab/modopt.git
+  ```
+- Install `femo_alpha` as a **user** by 
+  ```sh
+  pip install git+https://github.com/LSDOlab/femo_alpha.git
+  ```
+  or install `femo_alpha` as a **developer** by
+  ```sh
+  git clone https://github.com/LSDOlab/femo_alpha.git
+  pip install -e ./femo_alpha
+  ```
 
-## Setting up Documentation
-
-If you are not interested in using this repository as a template but only want to use the documentation template, 
-just copy the `/docs` directory and the `.readthedocs.yaml` file into your package root.
-However, make sure you have all the dependencies mentioned in the `setup.py` file installed before you build your
-documentation.
-
-### Writing
-Start by modifying the documentation pages by editing `.md` files in the `/src` directory.
-Customize/add/remove pages from the template according to your package's requirements.
-
-For automatically generated API references, add docstrings to your modules, classes, functions, etc., and
-then edit the list of directories containing files with docstrings intended for automatic API generation. 
-This can be done by editing the line `autoapi_dirs = ["../../lsdo_project_template/core"]` 
-in `conf.py` in the `/src` directory.
-
-Add Python files for examples and Jupyter notebooks for tutorials into the main project repository. 
-Filenames for examples should start with'ex_'.
-Add your examples and tutorials to the toctrees in `examples.md` and `tutorials.md` respectively.
-
-### Building
-Once you have all the source code written for your documentation, on the terminal/command line, run `make html`.
-This will build all the html pages locally and you can verify if the documentation was built as intended by
-opening the `docs/_build/html/welcome.html` on your browser.
-
-### Hosting
-On your *Read the Docs* account, **import** your project **manually** from github repository, and link the `/docs` directory.
-Make sure to edit `requirements.txt` with dependencies for *Read the Docs* to build the documentation exactly
-as in your local build.
-Optionally, edit the `.readthedocs.yml` in the project root directory for building with specific operating systems or versions of Python.
-After you commit and push, *Read the Docs* will build your package on its servers and once its complete,
-you will see your documentation online.
-The default website address will be generated based on your *Read the Docs* project name as `https://<proj_name>.readthedocs.io/`.
-You can also customize the URL on *Read the Docs*, if needed.
 
 ## Setting up Testing
+To test if your installation was successful, run 
+`ex_thickness_opt_cantilever_beam.py` from `/femo_alpha/examples/basic_examples/beam_thickness_opt/`.
+If everything works correctly, the following terminal output will
+be displayed.
+
+![beam_thickness_opt](/src/images/beam_thickness_opt.png "Optimal beam thickness distribution")
+
+```
+         ==============
+         Scipy summary:
+         ==============
+         Problem                    : beam_thickness
+         Solver                     : scipy_slsqp
+         Success                    : True
+         Message                    : Optimization terminated successfully
+         Objective                  : 23762.153677992977
+         Gradient norm              : 100814.27872282796
+         Total time                 : 12.408674001693726
+         Major iterations           : 111
+         Total function evals       : 383
+         Total gradient evals       : 111
+         ==================================================
+Optimization results:
+     ['compliance'] [23762.15367799]
+     ['volume'] [0.01]
+OpenMDAO compliance: 23762.153677443166
+
+```

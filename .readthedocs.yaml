@@ -6,21 +6,21 @@
 version: 2
 
 # Set the version of Python and other tools you might need
-# build:
-#   os: ubuntu-22.04
-#   tools:
-#     python: "3.11"
-#     # You can also specify other tool versions:
-#     # nodejs: "19"
-#     # rust: "1.64"
-#     # golang: "1.19"
 build:
-   os: "ubuntu-22.04"
-   tools:
-     python: "miniconda3-4.7"
-   jobs:
-     pre_create_environment:
-       - conda update --yes --quiet --name=base --channel=defaults conda
+  os: ubuntu-22.04
+  tools:
+    python: "3.11"
+    # You can also specify other tool versions:
+    # nodejs: "19"
+    # rust: "1.64"
+    # golang: "1.19"
+# build:
+#    os: "ubuntu-22.04"
+#    tools:
+#      python: "miniconda3-4.7"
+#    jobs:
+#      pre_create_environment:
+#        - conda update --yes --quiet --name=base --channel=defaults conda
 # Build documentation in the docs/ directory with Sphinx
 # To specify the path to the conf.py file, relative to the root of the project,
 sphinx:
@@ -36,13 +36,13 @@ formats:
    - htmlzip
 
 # # Optionally declare the Python requirements required to build your docs
-# python:
-#    install:
-#    - requirements: requirements.txt
-#    - method: pip
-#      path: .
+python:
+   install:
+   - requirements: requirements.txt
+   - method: pip
+     path: .
 
 # If using a conda environment, 
 # add the path to the Conda environment file, relative to the root of the project.
-conda:
-   environment: environment.yml
+# conda:
+#    environment: environment.yml

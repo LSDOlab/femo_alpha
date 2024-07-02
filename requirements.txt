@@ -3,7 +3,7 @@
 # E.g., for creating a conda environement, or to be used in testing workflow, 
 # or to host the documentation on Read the Docs
 
-dolfinx==0.5.1
+# dolfinx==0.5.1
 csdl_alpha @ git+https://github.com/LSDOlab/csdl_alpha.git
 numpy==1.24.2
 pytest==7.3.1

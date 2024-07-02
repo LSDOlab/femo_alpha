@@ -15,12 +15,11 @@
 A general framework for using **F**inite **E**lement in PDE-constrained **M**ultidisciplinary **O**ptimization problems. It relies on [FEniCSx](https://fenicsproject.org/) to provide solutions and partial derivatives of the PDE residuals, and uses [CSDL_alpha](https://github.com/LSDOlab/CSDL_alpha) as the umbrella for coupling and mathematical modeling of the multidisciplinary optimization problem. 
 
 
-
-# Installation
+## Installation
 
 The minimal requirements to use **femo_alpha** for modeling and simulation are `FEniCSx` and `CSDL_alpha`. For modeling aircraft design applications, you may install [CADDEE_alpha](https://github.com/LSDOlab/CADDEE_alpha) to enable coupling with solvers of other disciplines; for optimization, you will also need [ModOpt](https://github.com/LSDOlab/modopt) on top of them for Python bindings of various state-of-the-art optimizers. 
 
-## Installation instructions for users
+### Installation instructions
 It's recommended to use conda for installing the module and its dependencies.
 
 - Create a conda environment for `femo` with a specific Python version (Python 3.9) that is compatible with all of the dependencies
@@ -41,18 +40,16 @@ It's recommended to use conda for installing the module and its dependencies.
   pip install git+https://github.com/LSDOlab/CSDL_alpha.git
   pip install git+https://github.com/LSDOlab/modopt.git
   ```
-- Install `femo_alpha` by 
+- Install `femo_alpha` as a **user** by 
   ```sh
   pip install git+https://github.com/LSDOlab/femo_alpha.git
   ```
+  or install `femo_alpha` as a **developer** by
+  ```sh
+  git clone https://github.com/LSDOlab/femo_alpha.git
+  pip install -e ./femo_alpha
+  ```
 
-## Installation instructions for developers
-To install `femo_alpha` as a developer, first clone the repository and install using pip.
-On the terminal or command line, run
-```sh
-git clone https://github.com/LSDOlab/femo_alpha.git
-pip install -e ./femo_alpha
-```
 
 # License
 This project is licensed under the terms of the **GNU Lesser General Public License v3.0**.

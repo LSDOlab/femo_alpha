@@ -1,10 +1,10 @@
-"""
+'''
 The ``shell_model`` module
 --------------------------
 Contains the most important classes of the R-M shell formulations:
 the `materialModel` and the `elasticModel`, respectively for the
 constitutive model and the elastic energy in weak form.
-"""
+'''
 
 # from distutils.errors import DistutilsClassError
 
@@ -25,9 +25,9 @@ from femo_alpha.rm_shell.linear_shell_fenicsx.utils import project
 
 class ShellElement():
 
-    """
+    '''
     Set up the function space and the quadrature degrees on a given mesh
-    """
+    '''
     
     def __init__(self, mesh, element_type=None, 
                                 inplane_deg=None, 
@@ -35,7 +35,7 @@ class ShellElement():
         self.mesh = mesh
         self.cell = mesh.ufl_cell()
         if element_type == None:
-            self.element_type = "CG2CG1" # default
+            self.element_type = 'CG2CG1' # default
         else:
             self.element_type = element_type
             
@@ -46,72 +46,72 @@ class ShellElement():
     
     def setUpFunctionSpace(self):
     
-        """
+        '''
         Set up function space and the order of integration, with the first 
         vector element being mid-surface displacement, and the second vector 
         element being linearized rotation.
-        """
+        '''
         
         mesh = self.mesh
         cell = self.cell
         element_type = self.element_type
         W = None
             
-        if(element_type == "CG2CG1"):
+        if(element_type == 'CG2CG1'):
             # ------ CG2-CG1 ----------
-            VE1 = VectorElement("Lagrange",cell,1)
-            VE2 = VectorElement("Lagrange",cell,2)
+            VE1 = VectorElement('Lagrange',cell,1)
+            VE2 = VectorElement('Lagrange',cell,2)
             WE = MixedElement([VE2,VE1])
             W = FunctionSpace(mesh,WE)
             
         # CG2CR1 for triangle elements only
-        elif(element_type == "CG2CR1"):
+        elif(element_type == 'CG2CR1'):
             # ------ CG2-CR1 ----------
-            VE2 = VectorElement("Lagrange",cell,2)
-            VE1 = VectorElement("CR",cell,1)
+            VE2 = VectorElement('Lagrange',cell,2)
+            VE1 = VectorElement('CR',cell,1)
             WE = MixedElement([VE2,VE1])
             W = FunctionSpace(mesh,WE)
             
         # CG1CG1
-        elif(element_type == "CG1CG1"):
+        elif(element_type == 'CG1CG1'):
             # ------ CG1-CG1 ----------
-            VE1 = VectorElement("Lagrange",cell,1)
+            VE1 = VectorElement('Lagrange',cell,1)
             WE = MixedElement([VE1,VE1])
             W = FunctionSpace(mesh,WE)
             
         # Alnord-Falk (enriched elements) not supported by DOLFINX
         else:
-            print("Invalid element type.")
+            print('Invalid element type.')
             
         return W
     
     def getQuadratureRule(self, inplane_deg, shear_deg):
 
-        """
+        '''
         Returns the cell integrals for in-plane and shear energy with given
         quadrature degrees.
-        """
+        '''
         
         if inplane_deg == None and shear_deg == None:
             dx_shear = dx
             dx_inplane = dx
                 
         else: 
-            dx_inplane = dx(metadata={"quadrature_degree":inplane_deg})
-            dx_shear = dx(metadata={"quadrature_degree":shear_deg})
+            dx_inplane = dx(metadata={'quadrature_degree':inplane_deg})
+            dx_shear = dx(metadata={'quadrature_degree':shear_deg})
         
         return dx_inplane, dx_shear
         
 
 class MaterialModel(object):
 
-    """
+    '''
     This class is the material model (also called the CLT model for composites)
     generator, which can either take the material properties to calculate
     the constitutive matrices (A|B|D|A_s for Reissner-Mindlin shell) for single-
     layer shell, or convert the user-defined CLT model from numpy arrays to ufl
     tensors for multi-layer materials.
-    """
+    '''
 
     def __init__(self, CLT=None, E=None, nu=None, h=None, BOT=False):
         self.CLT = CLT
@@ -120,24 +120,24 @@ class MaterialModel(object):
             if (E and nu and h) is not None:
                 self.CLT = self.getSingleLayerCLT(E,nu,h)
             else:
-                raise ValueError("Material information is not complete.")
+                raise ValueError('Material information is not complete.')
         else:
             self.CLT = self.convertToUFL(CLT)
 
     def convertToUFL(self, CLT):
 
-        """
+        '''
         Returns the constitutive matrices as ufl forms for composites
-        """
+        '''
 
         A,B,D,A_s = CLT
         return as_matrix(A), as_matrix(B), as_matrix(D), as_matrix(A_s)
 
     def getSingleLayerCLT(self,E,nu,h):
 
-        """
+        '''
         Returns the constitutive matrices for single-layer materials
-        """
+        '''
 
         G = E / 2 / (1 + nu)
         C = (E/(1.0 - nu*nu))*as_matrix([[1.0,  nu,   0.0         ],
@@ -158,13 +158,13 @@ class MaterialModel(object):
 
 class MaterialModelComposite(object):
 
-    """
+    '''
     This class is the material model (also called the CLT model for composites)
     generator, which can either take the material properties to calculate
     the constitutive matrices (A|B|D|A_s for Reissner-Mindlin shell) for single-
     layer shell, or convert the user-defined CLT model from numpy arrays to ufl
     tensors for multi-layer materials.
-    """
+    '''
 
 
     def __init__(self, mesh=None, CLT_data=None, E=None, nu=None, h=None):
@@ -173,11 +173,11 @@ class MaterialModelComposite(object):
         self.CLT = self.convertToUFL(CLT_data)
 
     def convertToUFL(self, CLT_data):
-        """
+        '''
         Returns the constitutive matrices as ufl forms for composites
-        """
-        VABD = TensorFunctionSpace(self.mesh, ("DG", 0), shape=(3, 3))
-        VAs = TensorFunctionSpace(self.mesh, ("DG", 0), shape=(2, 2))
+        '''
+        VABD = TensorFunctionSpace(self.mesh, ('DG', 0), shape=(3, 3))
+        VAs = TensorFunctionSpace(self.mesh, ('DG', 0), shape=(2, 2))
         A = Function(VABD)
         B = Function(VABD)
         D = Function(VABD)
@@ -191,10 +191,10 @@ class MaterialModelComposite(object):
 
 class ElasticModelShapeOpt(object):
 
-    """
+    '''
     Class for the Reissner-Mindlin shell model, which can generate the potential
     energy based on the given mesh, function space, and the material properties.
-    """
+    '''
 
     def __init__(self,mesh, w, uhat, clt_matrices, shl_offset=None):
         self.mesh = mesh
@@ -205,7 +205,7 @@ class ElasticModelShapeOpt(object):
 
         # Define thickness-based offsets depending on MID/BOT (or
         # any other) shell element reference plane definition
-        off_fun = FunctionSpace(self.mesh, ("DG", 0))
+        off_fun = FunctionSpace(self.mesh, ('DG', 0))
         self.offset = Function(off_fun)
         if (shl_offset is not None):
             self.offset.vector.setArray(shl_offset)
@@ -245,10 +245,10 @@ class ElasticModelShapeOpt(object):
 
     def local_shear_strains(self):
 
-        """
+        '''
         Transverse shear strains in local coordinates, as a vector
          such that gamma[i] = 2*eps[i,2], for i in {0,1}
-        """
+        '''
 
         dudxi2_global = -cross(self.E2,self.theta)
         i,j = indices(2)
@@ -260,10 +260,10 @@ class ElasticModelShapeOpt(object):
 
     def computeStresses(self):
 
-        """
+        '''
         Returns the stress tensors as the product of the CLT model and the
         local strains.
-        """
+        '''
 
         # membrane stresses
         N = self.A*voigt2D(self.eps) + self.B*voigt2D(self.kappa)
@@ -298,9 +298,9 @@ class ElasticModelShapeOpt(object):
 
     def elasticEnergy(self, E=None, h=None, dx_inplane=dx, dx_shear=dx):
 
-        """
+        '''
         Returns the potential energy of the elastic shell model.
-        """
+        '''
         return self.shearEnergy(dx_shear) + \
                 self.membraneEnergy(dx_inplane) + \
                 self.bendingEnergy(dx_inplane) + \
@@ -309,10 +309,10 @@ class ElasticModelShapeOpt(object):
     def weakFormResidual(self, elasticEnergy, f,
                         penalty=False, g=None, dss=None, dSS=None):
 
-        """
+        '''
         Returns the PDE residual of the elasticity problem in weak form,
         where `f` is the applied body force per unit area.
-        """
+        '''
         dw = TestFunction(self.W)
         self.du_mid,self.dtheta = split(dw)
         retval = derivative(elasticEnergy,self.w,dw)
@@ -330,13 +330,13 @@ class ElasticModelShapeOpt(object):
         dsx_dsy_n_x = J(self.uhat)*inv(F(self.uhat).T)*N
         norm_dsx_dsy_n_x = sqrt(dot(dsx_dsy_n_x, dsx_dsy_n_x))
         return norm_dsx_dsy_n_x*beta/h_E*inner(u-g, v)*dss + \
-               (norm_dsx_dsy_n_x*beta/h_E*inner(u-g, v))("+")*dSS + \
-               (norm_dsx_dsy_n_x*beta/h_E*inner(u-g, v))("-")*dSS
+               (norm_dsx_dsy_n_x*beta/h_E*inner(u-g, v))('+')*dSS + \
+               (norm_dsx_dsy_n_x*beta/h_E*inner(u-g, v))('-')*dSS
 
     def inertialResidual(self, rho, h):
-        """
+        '''
         Formulation inspired by https://www.mdpi.com/2673-8716/1/1/5
-        """
+        '''
         h_mesh = CellDiameter(self.mesh)
         retval = 0
         retval += rho*h*inner(self.u_mid, self.du_mid)*J(self.uhat)*dx
@@ -349,19 +349,19 @@ class ElasticModelShapeOpt(object):
         return retval
 
 class ShellStressRM:
-    """
+    '''
     Class to compute Reissner-Mindlin shell's stresses using
     linear elastic material model.
-    """
+    '''
     def __init__(self, mesh, w, uhat, h_th, E, nu):
-        """
+        '''
         Parameters
         ----------
         w : dolfin Function. Numerical solution of problem.
         E : dolfin constant. Material's Young's modulus
         nu : dolfin constant. Material's Poisson's ratio
         h_th : dolfin constant. Shell's thickness
-        """
+        '''
         self.mesh = mesh
         self.u_mid, self.theta = split(w)
         self.uhat = uhat
@@ -388,37 +388,37 @@ class ShellStressRM:
                                      [0.0,  0.0,  0.5*(1.0-nu)]])
 
     def u(self, xi2):
-        """
+        '''
         Displacement at through-thickness coordinate xi2:
         Formula (7.1) from http://www2.nsysu.edu.tw/csmlab/fem/dyna3d/theory.pdf
-        """
+        '''
         return self.u_mid - xi2*cross(self.E2,self.theta)
 
 
     def gradu_local(self, xi2):
-        """
+        '''
         In-plane gradient components of displacement in the local orthogonal
         coordinate system:
-        """
+        '''
         gradu_global = gradx(self.u(xi2), self.uhat) # (3x3 matrix, zero along E2 direction)
         i,j,k,l = indices(4)
         return as_tensor(self.E01[i,k]*gradu_global[k,l]*self.E01[j,l],(i,j))
 
 
     def eps(self, xi2):
-        """
+        '''
         In-plane strain components of local orthogonal coordinate system at
         through-thickness coordinate xi2, in Voigt notation:
-        """
+        '''
 
         eps_mat = sym(self.gradu_local(xi2))
         return as_vector([eps_mat[0,0], eps_mat[1,1], 2*eps_mat[0,1]])
 
     def gamma_2(self, xi2):
-        """
+        '''
         Transverse shear strains in local coordinates at given xi2, as a vector
         such that gamma_2(xi2)[i] = 2*eps[i,2], for i in {0,1}
-        """
+        '''
         dudxi2_global = -cross(self.E2,self.theta)
         i,j = indices(2)
         dudxi2_local = as_tensor(dudxi2_global[j]*self.E01[i,j],(i,))
@@ -427,9 +427,9 @@ class ShellStressRM:
 
     def cauchyStresses(self, xi2):
 
-        """
+        '''
         Returns the constitutive matrices for isotropic materials
-        """
+        '''
         # out-of-plane shear
         sigma_shear = self.G*self.gamma_2(xi2)
         # in-plane stresses
@@ -437,10 +437,10 @@ class ShellStressRM:
         return (sigma_hat, sigma_shear)
 
     def vonMisesStress(self, xi2):
-        """
+        '''
         Returns Reissner-Mindlin shell's von Mises stress at the through
         thickness coordinate ``xi2`` (-h_th/2 <= xi2 <= h_th/2).
-        """
+        '''
         sigma_hat, sigma_shear = self.cauchyStresses(xi2)
         # von Mises stress formula with plane stress
         # vonMises = sqrt(sigma_hat[0]**2 - sigma_hat[0]*sigma_hat[1]
@@ -451,7 +451,7 @@ class ShellStressRM:
         return vonMises
 
     def projectedvonMisesStress(self, xi2):
-        V1 = FunctionSpace(self.mesh, ("CG", 1))
+        V1 = FunctionSpace(self.mesh, ('CG', 1))
         von_Mises_func = Function(V1)
         project(self.vonMisesStress(xi2), von_Mises_func, lump_mass=False)
         return von_Mises_func
@@ -459,10 +459,10 @@ class ShellStressRM:
 
 # def solveNonlinear(F, w, bcs, abs_tol=1e-50, max_it=3, log=False):
 
-#     """
+#     '''
 #     Wrap up the nonlinear solver for the problem F(w)=0 and
 #     returns the solution
-#     """
+#     '''
 
 #     problem = NonlinearProblem(F, w, bcs)
 
@@ -478,14 +478,14 @@ class ShellStressRM:
 #     solver.max_it = max_it
 #     solver.error_on_nonconvergence = False
 #     opts = PETSc.Options()
-#     opts["nls_solve_pc_factor_mat_solver_type"] = "mumps"
+#     opts['nls_solve_pc_factor_mat_solver_type'] = 'mumps'
 #     solver.solve(w)
 
 
 # def solveKSP(A, b, x):
-#     """
+#     '''
 #     Wrap up the KSP solver for the linear system Ax=b
-#     """
+#     '''
 #     ######### Set up the KSP solver ###############
 
 #     ksp = PETSc.KSP().create(A.getComm())
@@ -493,14 +493,14 @@ class ShellStressRM:
 
 #     # additive Schwarz method
 #     pc = ksp.getPC()
-#     pc.setType("asm")
+#     pc.setType('asm')
 
 #     ksp.setFromOptions()
 #     ksp.setUp()
 
 #     localKSP = pc.getASMSubKSP()[0]
 #     localKSP.setType(PETSc.KSP.Type.GMRES)
-#     localKSP.getPC().setType("lu")
+#     localKSP.getPC().setType('lu')
 #     localKSP.setTolerances(1.0e-12)
 #     #ksp.setGMRESRestart(30)
 #     ksp.setConvergenceHistory()
@@ -509,18 +509,18 @@ class ShellStressRM:
 
 
 # def solveKSP_mumps(A, b, x):
-#     """
+#     '''
 #     Implementation of KSP solution of the linear system Ax=b using MUMPS
-#     """
+#     '''
 
 #     # setup petsc for pre-only solve
 #     ksp = PETSc.KSP().create(A.getComm())
 #     ksp.setOperators(A)
-#     ksp.setType("preonly")
+#     ksp.setType('preonly')
 
 #     # set LU w/ MUMPS
 #     pc = ksp.getPC()
-#     pc.setType("lu")
+#     pc.setType('lu')
 #     pc.setFactorSolverType('mumps')
 
 #     # solve
