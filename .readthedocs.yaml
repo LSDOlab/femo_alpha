@@ -14,7 +14,7 @@ version: 2
 #     # nodejs: "19"
 #     # rust: "1.64"
 #     # golang: "1.19"
- build:
+build:
    os: "ubuntu-22.04"
    tools:
      python: "miniconda3-4.7"
