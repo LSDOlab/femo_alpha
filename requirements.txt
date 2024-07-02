@@ -22,7 +22,6 @@ sphinxcontrib-collections @ git+https://github.com/anugrahjo/sphinx-collections.
 csdl_alpha @ git+https://github.com/LSDOlab/csdl_alpha.git
 numpy==1.24.2
 pytest==7.3.1
-myst-nb==0.17.2
 gitpython==3.1.31
 git+https://github.com/anugrahjo/sphinx-collections.git
 vedo==2024.5.1
