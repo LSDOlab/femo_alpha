@@ -58,7 +58,7 @@ class RMShellModel:
         '''
         Set up the FEMO FEA model for RM shell analysis
         '''
-        print("-"*40)
+        print('-'*40)
         print('Setting up the FEA model for RM shell analysis ...')
         mesh = self.mesh
         shell_pde = self.shell_pde = RMShellPDE(mesh)
@@ -68,7 +68,7 @@ class RMShellModel:
         PENALTY_BC = True
 
         fea = FEA(mesh)
-        fea.PDE_SOLVER = "Newton"
+        fea.PDE_SOLVER = 'Newton'
         fea.REPORT = False
         fea.record = self.record
         fea.linear_problem = True
@@ -102,8 +102,8 @@ class RMShellModel:
         compliance_form = shell_pde.compliance(u_mid,uhat,h,f)
         mass_form = shell_pde.mass(uhat, h, density)
         elastic_energy_form = shell_pde.elastic_energy(w,uhat,h,E)
-        dx_reduced = ufl.Measure("dx", domain=mesh, 
-                                 metadata={"quadrature_degree":4})
+        dx_reduced = ufl.Measure('dx', domain=mesh, 
+                                 metadata={'quadrature_degree':4})
         pnorm_stress_form = shell_pde.pnorm_stress(
                         w,uhat,h,E,nu,
                         dx_reduced,m=self.m,rho=self.rho,
@@ -154,10 +154,9 @@ class RMShellModel:
                 node_disp: csdl.Variable=None,
                 debug_mode=False,
                 is_pressure=True) -> csdl.VariableGroup:
-        """
+        '''
         Parameters:
         ----------
-        [RX]: consider a "shell_inputs" VariableGroup when the aeroelastic coupling is ready
         Vector csdl.Variable:
             > force_vector: the force vector applied on the shell mesh nodes
             > thickness: the thickness on the shell mesh nodes
@@ -177,7 +176,7 @@ class RMShellModel:
             > compliance: the compliance of the shell model
             > tip_disp: the tip displacement of the shell model
             > mass: the mass of the shell model
-        """
+        '''
         shell_inputs = csdl.VariableGroup()
 
         #:::::::::::::::::::::: Prepare the inputs :::::::::::::::::::::::::::::
@@ -197,6 +196,7 @@ class RMShellModel:
             shell_inputs.F_solid = reshaped_force
         else:
             # Compute nodal pressures based on forces
+            print('Converting forces to pressures ...')
             A = self.shell_pde.construct_force_to_pressure_map()
             pressure = csdl.solve_linear(convertToDense(A), reshaped_force)
             shell_inputs.F_solid = pressure
@@ -227,7 +227,7 @@ class RMShellModel:
         shell_outputs.aggregated_stress = aggregated_stress
 
         print('RM shell model evaluation completed.')
-        print("-"*40)
+        print('-'*40)
         return shell_outputs
 
 class AggregatedStressModel:

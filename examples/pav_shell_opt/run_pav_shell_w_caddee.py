@@ -10,6 +10,7 @@ from femo_alpha.fea.utils_dolfinx import readFEAMesh, reconstructFEAMesh
 from lsdo_airfoil.core.three_d_airfoil_aero_model import ThreeDAirfoilMLModelMaker
 from femo_alpha.rm_shell.rm_shell_model import RMShellModel
 import lsdo_function_spaces as lfs
+import aeroelastic_coupling_utils as acu
 import vedo
 import os
 
@@ -249,11 +250,14 @@ def define_analysis(caddee: cd.CADDEE, pitch_angle=None):
     airfoil_lower_nodes = wing_lattice._airfoil_lower_para
 
 
+
     pressure_indexed_space : lfs.FunctionSetSpace = wing.quantities.pressure_space
     pressure_function = pressure_indexed_space.fit_function_set(
         values=spanwise_p.reshape((-1, 1)), parametric_coordinates=airfoil_upper_nodes+airfoil_lower_nodes,
         regularization_parameter=1e-4,
     )
+
+
     # framework to shell (SIFR)
     pav_shell_mesh = mesh_container["shell_mesh"]
     wing_shell_mesh = pav_shell_mesh.discretizations['wing']
@@ -273,6 +277,16 @@ def define_analysis(caddee: cd.CADDEE, pitch_angle=None):
     normals = wing.geometry.evaluate_normals(nodes_parametric)
     directed_pressures = normals*csdl.expand(shell_pressures, normals.shape, 'i->ij')
 
+
+    force_magnitudes, force_para_coords = pressure_function.integrate(wing.geometry, grid_n=50)
+    force_magnitudes:csdl.Variable = force_magnitudes.flatten()
+    force_coords = wing.geometry.evaluate(force_para_coords)
+    force_normals = wing.geometry.evaluate_normals(force_para_coords)
+    force_vectors = force_normals*csdl.expand(force_magnitudes, force_normals.shape, 'i->ij')
+
+    mapper = acu.NodalMap()
+    force_map = mapper.evaluate(force_coords, nodes.reshape((-1,3)))
+    shell_forces = force_map.T() @ force_vectors
     #####################################################################
 
 
@@ -300,6 +314,7 @@ def define_analysis(caddee: cd.CADDEE, pitch_angle=None):
     density = csdl.expand(density0, out_shape=(nn,))   
     density.add_name('density')
 
+    # Define structure boundary conditions
     #### Fix all displacements and rotations on the root surface  ####
     DOLFIN_EPS = 3E-16
     y_root = -1E-6 # create margin to make sure the nodes on the boundary are fixed
@@ -309,12 +324,20 @@ def define_analysis(caddee: cd.CADDEE, pitch_angle=None):
     shell_model = RMShellModel(mesh = wing_shell_mesh_fenics, 
                                shell_bc_func=ClampedBoundary,  # set up bc locations
                                record = True) # record flag for saving the structure outputs as # xdmf files
-    shell_outputs = shell_model.evaluate(directed_pressures, # force_vector
+    
+    ## Aerodynamic loads as directed nodal pressures
+    # shell_outputs = shell_model.evaluate(directed_pressures, # force_vector
+    #                         thickness, E, nu, density, # material properties
+    #                         node_disp,                 # mesh deformation
+    #                         debug_mode=False,
+    #                         is_pressure=True)          # debug mode flag
+    # Aerodynamic loads as directed nodal forces
+
+    shell_outputs = shell_model.evaluate(shell_forces, # force_vector
                             thickness, E, nu, density, # material properties
                             node_disp,                 # mesh deformation
                             debug_mode=False,
-                            is_pressure=True)          # debug mode flag
-       
+                            is_pressure=False)          # debug mode flag
 
     # Demostrate all the shell outputs even if they might not be used
     disp_solid = shell_outputs.disp_solid # displacement on the shell mesh
