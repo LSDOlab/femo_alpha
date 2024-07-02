@@ -1,4 +1,4 @@
-name: fenicsx_new_csdl
+name: femo
 channels:
   - conda-forge
   - defaults
