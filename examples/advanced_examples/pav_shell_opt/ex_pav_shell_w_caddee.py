@@ -1,3 +1,15 @@
+'''PAV wing with geometry setup and aeroelastic analysis'''
+'''
+PAV wing shell optimization setup using the new FEMO-CSDL-CADDEE interface.
+This example uses pre-built Reissner-Mindlin shell model in FEMO coupled
+    with the VLM aerodynamic solver implemented in CSDL using SIFR.
+    It contains material parametrization and shape parametrization 
+    for different sets of design variables.
+
+Author: Ru Xiang
+Date: 2024-06-20
+'''
+
 import CADDEE_alpha as cd
 import csdl_alpha as csdl
 import numpy as np

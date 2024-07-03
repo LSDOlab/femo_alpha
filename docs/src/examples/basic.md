@@ -10,6 +10,5 @@ examples page.
 
 ```{toctree}
 :maxdepth: 3
-
 ../_temp/examples/basic_examples/beam_thickness_opt/ex_thickness_opt_cantilever_beam
 ```

@@ -1,5 +1,6 @@
+'''Shell thickness optimization of a cantilever plate '''
 '''
-Thickness optimization of Cantilever Plate with Reissner-Mindlin shell elements.
+Thickness optimization of cantilever plate with Reissner-Mindlin shell elements.
 This example uses pre-built Reissner-Mindlin shell model in FEMO
 
 Author: Ru Xiang

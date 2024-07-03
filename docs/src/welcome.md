@@ -15,7 +15,7 @@ The **F**inite **E**lements for **M**ultidisciplinary **O**ptimization (**FEMO**
             and Kamensky, David 
             and Hwang, John T.",
     title  = "Automating adjoint sensitivity analysis for multidisciplinary models involving partial differential equations",
-    howpublished = {Jul 2024 (under review)}
+    howpublished = {Jul 2024, Preprint available at \url{https://doi.org/10.21203/rs.3.rs-4265983/v1}}
 }
 
 @misc{scotzniovsky2024,

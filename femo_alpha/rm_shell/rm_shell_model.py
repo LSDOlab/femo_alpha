@@ -6,7 +6,8 @@ import numpy as np
 from mpi4py import MPI
 
 from femo_alpha.fea.fea_dolfinx import FEA
-from femo_alpha.fea.utils_dolfinx import createCustomMeasure, convertToDense
+from femo_alpha.fea.utils_dolfinx import (createCustomMeasure, convertToDense,
+                                            assemble)
 from femo_alpha.rm_shell.rm_shell_pde import RMShellPDE
 from femo_alpha.csdl_alpha_opt.fea_model import FEAModel
 
@@ -108,7 +109,6 @@ class RMShellModel:
                         alpha=None,regularization=False)
         stress_form = shell_pde.von_Mises_stress(
                         w,uhat,h,E,nu,surface='Top')
-
         fea.add_input('thickness', h, init_val=0.001, record=self.record)
         fea.add_input('F_solid', f, init_val=1., record=self.record)
         fea.add_input('E', E, init_val=1., record=self.record)

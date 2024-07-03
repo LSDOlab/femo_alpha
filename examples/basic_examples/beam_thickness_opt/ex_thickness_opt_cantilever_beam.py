@@ -1,3 +1,4 @@
+'''1D beam thickness optimization'''
 '''
 Thickness optimization of 1D Cantilever Beam with a rectangular cross section
 this example uses Euler-Bernoulli beam theory

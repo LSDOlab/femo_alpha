@@ -1,10 +1,11 @@
-"""
-PAV wing shell optimization setup using the new FEMO--csdl_alpha interface.
+'''PAV wing setup with shell analysis'''
+'''
+PAV wing shell optimization setup using the new FEMO-CSDL interface.
 This example uses pre-built Reissner-Mindlin shell model in FEMO
 
 Author: Ru Xiang
 Date: 2024-06-20
-"""
+'''
 
 import dolfinx
 from mpi4py import MPI
