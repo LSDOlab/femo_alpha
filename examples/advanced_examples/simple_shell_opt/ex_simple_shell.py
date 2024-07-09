@@ -16,7 +16,7 @@ from femo_alpha.rm_shell.rm_shell_model import RMShellModel
 from femo_alpha.fea.utils_dolfinx import createCustomMeasure
 
 run_verify_forward_eval = True
-run_check_derivatives = False
+run_check_derivatives = True
 run_optimization = False
 
 '''
@@ -57,7 +57,10 @@ recorder = csdl.Recorder(inline=True)
 recorder.start()
 
 force_vector = csdl.Variable(value=np.zeros((nn, 3)), name='force_vector')
-force_vector.value[:, 2] = f_d # body force per unit surface area
+force_vector.value[:, 2] = f_d*0.00868/0.04627 # body force per node
+
+pressure_vector = csdl.Variable(value=np.zeros((nn, 3)), name='force_vector')
+pressure_vector.value[:, 2] = f_d # body force per unit surface area
 
 thickness = csdl.Variable(value=h_val*np.ones(nn), name='thickness')
 E = csdl.Variable(value=E_val*np.ones(nn), name='E')
@@ -69,14 +72,19 @@ node_disp.add_name('node_disp')
 
 # All FEA variables will be saved to xdmf files if record=True
 shell_model = RMShellModel(mesh, shell_bc_func=ClampedBoundary, record=True)
+# shell_outputs = shell_model.evaluate(pressure_vector, thickness, E, nu, density,
+#                                         node_disp,
+#                                         debug_mode=False,
+#                                         is_pressure=True)
 shell_outputs = shell_model.evaluate(force_vector, thickness, E, nu, density,
                                         node_disp,
-                                        debug_mode=False)
-
+                                        debug_mode=False,
+                                        is_pressure=False)
 disp_solid = shell_outputs.disp_solid
 compliance = shell_outputs.compliance
 aggregated_stress = shell_outputs.aggregated_stress
 mass = shell_outputs.mass
+F_solid = shell_outputs.F_solid
 
 if run_verify_forward_eval:
     Ix = width*h_val**3/12
@@ -85,9 +93,9 @@ if run_verify_forward_eval:
     print("Reissner-Mindlin FE deflection:", max(disp_solid.value))
 
 if run_check_derivatives:
-    from csdl_alpha.src.operations.derivative.utils import verify_derivatives_inline
-    verify_derivatives_inline([compliance, aggregated_stress, mass],[node_disp], 
-                                step_size=1E-11, raise_on_error=False)
+    sim = csdl.experimental.PySimulator(recorder)
+    sim.check_totals([aggregated_stress],[thickness])
+    # sim.check_totals([aggregated_stress],[force_vector])
 
 if run_optimization:
     from modopt import CSDLAlphaProblem

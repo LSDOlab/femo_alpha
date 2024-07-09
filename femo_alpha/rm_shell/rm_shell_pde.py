@@ -152,13 +152,13 @@ class RMShellPDE:
         # Assemble linear system
         A = assemble_matrix(form(a))
         A.assemble()
-        # # convert mass matrix to sparse Python array
-        # A_csr = A.getValuesCSR()
-        # A_sp = sp.csr_matrix((A_csr[2], A_csr[1], A_csr[0]))
+        # convert mass matrix to sparse Python array
+        A_csr = A.getValuesCSR()
+        A_sp = sp.csr_matrix((A_csr[2], A_csr[1], A_csr[0]))
 
-        # # eliminate zeros that are present in mass matrix
-        # A_sp.eliminate_zeros()
-        return A
+        # eliminate zeros that are present in mass matrix
+        A_sp.eliminate_zeros()
+        return A_sp
     
 
     def construct_nodal_disp_map(self):

@@ -204,10 +204,9 @@ if run_verify_forward_eval:
     4.2 Check the derivatives
 '''
 if run_check_derivatives:
-    from csdl_alpha.src.operations.derivative.utils import verify_derivatives_inline
-    verify_derivatives_inline([displacements,volume,compliance], [thickness], 
+    sim = csdl.experimental.PySimulator(recorder)
+    sim.check_totals([displacements,volume,compliance], [thickness], 
                                 step_size=1e-6, raise_on_error=False)
-
 
 '''
     4.3 Set up and run the optimization problem

@@ -113,16 +113,7 @@ if run_check_derivatives:
     # [RX] extra caution is needed for the step_size; 
     # rule-of-thumb: 1E-6/order_of_magnitude(analytical_derivative)
 
-    from csdl_alpha.src.operations.derivative.utils import verify_derivatives_inline
-    verify_derivatives_inline([wing_aggregated_stress], 
-                                [E_0], 
-                                step_size=1E8, raise_on_error=False)
+    sim = csdl.experimental.PySimulator(recorder)
+    sim.check_totals([wing_aggregated_stress], [thickness])
 
-    verify_derivatives_inline([wing_aggregated_stress], 
-                                [nu_0], 
-                                step_size=1E-11, raise_on_error=False)
-
-    verify_derivatives_inline([wing_aggregated_stress], 
-                                [thickness_0], 
-                                step_size=1E-11, raise_on_error=False)
 recorder.stop()

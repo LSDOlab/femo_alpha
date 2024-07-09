@@ -490,18 +490,8 @@ if run_sweep:
 
 
 if run_check_derivatives:
-    from csdl_alpha.src.operations.derivative.utils import verify_derivatives_inline
-    print("Verifying derivatives ...")
-    # verify_derivatives_inline([wing_aggregated_stress], 
-    #                             [AR], 
-    #                             step_size=1e1, raise_on_error=False)
-    # verify_derivatives_inline([wing_aggregated_stress], 
-    #                             [span], 
-    #                             step_size=1e-9, raise_on_error=False)
-
-    verify_derivatives_inline([node_disp], 
-                                [AR], 
-                                step_size=1e-1, raise_on_error=False)
+    sim = csdl.experimental.PySimulator(recorder)
+    sim.check_totals([wing_aggregated_stress], [thickness])
 
 
 recorder.stop()

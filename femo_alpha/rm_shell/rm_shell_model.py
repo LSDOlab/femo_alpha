@@ -183,7 +183,6 @@ class RMShellModel:
         # reshape the force matrix to vector and sort indices
         force_reshaping_model = ForceReshapingModel(shell_pde=self.shell_pde)
         reshaped_force = force_reshaping_model.evaluate(force_vector)
-        reshaped_force.add_name('F_solid')
 
         if is_pressure:
             shell_inputs.F_solid = reshaped_force
@@ -191,8 +190,9 @@ class RMShellModel:
             # Compute nodal pressures based on forces
             print('Converting forces to pressures ...')
             A = self.shell_pde.construct_force_to_pressure_map()
-            pressure = csdl.solve_linear(convertToDense(A), reshaped_force)
+            pressure = csdl.solve_linear(A.toarray(), reshaped_force)
             shell_inputs.F_solid = pressure
+        shell_inputs.F_solid.add_name('F_solid')
 
         # sort the nodal mesh deformation based on FEniCS indices
         if node_disp is None:
