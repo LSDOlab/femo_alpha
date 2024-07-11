@@ -235,9 +235,9 @@ if run_optimization:
     print("OpenMDAO compliance: "+str(23762.153677443166))
 
     fig, ax = plt.subplots()
-    ax.plot(np.linspace(0.0,L,50), thick_ref, "b-o",
+    ax.plot(np.linspace(0.0,L,50), thick_ref, "b--", 
                         label="OpenMDAO results")
-    ax.plot(np.linspace(0.0,L,nel), thickness.value, "r-o",
+    ax.plot(np.linspace(0.0,L,nel), thickness.value, "r.",
                         label="FEMO results")
     ax.set_xlabel("x")
     ax.set_ylabel("optimized thickness distribution")

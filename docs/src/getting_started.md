@@ -18,7 +18,7 @@ It's recommended to use conda for installing the module and its dependencies.
   ```sh
   conda activate femo
   ```
-- Install the latest FEniCSx by `conda-forge`
+- Install FEniCSx by `conda-forge`
   ```sh
   conda install -c conda-forge fenics-dolfinx=0.5.1
   ```
@@ -44,7 +44,7 @@ To test if your installation was successful, run
 If everything works correctly, the following terminal output will
 be displayed.
 
-![beam_thickness_opt](/src/images/beam_thickness_opt.png "Optimal beam thickness distribution")
+![beam_thickness_opt](/src/images/beam_thickness_distribution.png "Optimal beam thickness distribution")
 
 ```
          ==============

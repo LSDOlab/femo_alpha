@@ -31,7 +31,7 @@ It's recommended to use conda for installing the module and its dependencies.
   ```sh
   conda activate femo
   ```
-- Install the latest FEniCSx by `conda-forge`
+- Install FEniCSx by `conda-forge`
   ```sh
   conda install -c conda-forge fenics-dolfinx=0.5.1
   ```

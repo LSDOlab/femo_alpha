@@ -16,8 +16,9 @@ from femo_alpha.rm_shell.rm_shell_model import RMShellModel
 from femo_alpha.fea.utils_dolfinx import createCustomMeasure
 
 run_verify_forward_eval = True
-run_check_derivatives = True
+run_check_derivatives = False
 run_optimization = False
+element_wise_material = True
 
 '''
 1. Define the mesh
@@ -62,16 +63,24 @@ force_vector.value[:, 2] = f_d*0.00868/0.04627 # body force per node
 pressure_vector = csdl.Variable(value=np.zeros((nn, 3)), name='force_vector')
 pressure_vector.value[:, 2] = f_d # body force per unit surface area
 
-thickness = csdl.Variable(value=h_val*np.ones(nn), name='thickness')
-E = csdl.Variable(value=E_val*np.ones(nn), name='E')
-nu = csdl.Variable(value=nu_val*np.ones(nn), name='nu')
-density = csdl.Variable(value=rho_val*np.ones(nn), name='density')
-
 node_disp = csdl.Variable(value=np.zeros((nn, 3)), name='node_disp')
 node_disp.add_name('node_disp')
 
+if element_wise_material:
+    thickness = csdl.Variable(value=h_val*np.ones(nel), name='thickness')
+    E = csdl.Variable(value=E_val*np.ones(nel), name='E')
+    nu = csdl.Variable(value=nu_val*np.ones(nel), name='nu')
+    density = csdl.Variable(value=rho_val*np.ones(nel), name='density')
+else:
+    thickness = csdl.Variable(value=h_val*np.ones(nn), name='thickness')
+    E = csdl.Variable(value=E_val*np.ones(nn), name='E')
+    nu = csdl.Variable(value=nu_val*np.ones(nn), name='nu')
+    density = csdl.Variable(value=rho_val*np.ones(nn), name='density')
+        
 # All FEA variables will be saved to xdmf files if record=True
-shell_model = RMShellModel(mesh, shell_bc_func=ClampedBoundary, record=True)
+shell_model = RMShellModel(mesh, shell_bc_func=ClampedBoundary, 
+                           element_wise_material=element_wise_material,
+                           record=True)
 # shell_outputs = shell_model.evaluate(pressure_vector, thickness, E, nu, density,
 #                                         node_disp,
 #                                         debug_mode=False,

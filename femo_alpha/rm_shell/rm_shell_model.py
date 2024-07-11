@@ -23,9 +23,11 @@ class RMShellModel:
     '''
     def __init__(self, mesh: dolfinx.mesh, 
                             shell_bc_func: callable=None, 
+                            element_wise_material=False,
                             record=True):
         self.mesh = mesh
         self.shell_bc_func = shell_bc_func # shell bc information
+        self.element_wise_material = element_wise_material
         self.record = record
         self.m, self.rho = 1e-6, 100
 
@@ -60,7 +62,8 @@ class RMShellModel:
         print('-'*40)
         print('Setting up the FEA model for RM shell analysis ...')
         mesh = self.mesh
-        shell_pde = self.shell_pde = RMShellPDE(mesh)
+        shell_pde = self.shell_pde = RMShellPDE(mesh, 
+                                                element_wise_material=self.element_wise_material)
         dss = self.dss
         dSS = self.dSS
 
@@ -174,11 +177,16 @@ class RMShellModel:
 
         #:::::::::::::::::::::: Prepare the inputs :::::::::::::::::::::::::::::
         # sort the material properties based on FEniCS indices
-        fenics_mesh_indices = self.shell_pde.mesh.geometry.input_global_indices    
+        if self.element_wise_material:
+            fenics_mesh_indices = self.shell_pde.mesh.topology.original_cell_index.tolist()
+        else:
+            fenics_mesh_indices = self.shell_pde.mesh.geometry.input_global_indices
         shell_inputs.thickness = thickness[fenics_mesh_indices]
         shell_inputs.E = E[fenics_mesh_indices]
         shell_inputs.nu = nu[fenics_mesh_indices]
         shell_inputs.density = density[fenics_mesh_indices]
+
+
 
         # reshape the force matrix to vector and sort indices
         force_reshaping_model = ForceReshapingModel(shell_pde=self.shell_pde)

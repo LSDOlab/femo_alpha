@@ -22,7 +22,7 @@ class RMShellPDE:
     '''
     Class for the PDE of the Reissner-Mindlin shell element and essential outputs
     '''
-    def __init__(self, mesh):
+    def __init__(self, mesh, element_wise_material=False):
         self.mesh = mesh
         element_type = "CG2CG1"
         #element_type = "CG2CR1"
@@ -33,7 +33,10 @@ class RMShellPDE:
         self.dx_inplane, self.dx_shear = element.dx_inplane, element.dx_shear
 
         self.W  = self.element.W
-        self.VT = FunctionSpace(mesh, ("CG", 1))
+        if element_wise_material:
+            self.VT = FunctionSpace(mesh, ("DG", 0))
+        else:
+            self.VT = FunctionSpace(mesh, ("CG", 1))
         self.VF = VectorFunctionSpace(mesh, ("CG", 1))
         self.bf_sup_sizes = assemble_vector(
                 form(TestFunction(self.VF.sub(0).collapse()[0])*dx)).getArray()
@@ -68,7 +71,7 @@ class RMShellPDE:
         return regularization
 
     def compliance(self,u_mid,uhat,h,f):
-        return inner(u_mid,f)*J(uhat)*ufl.dx + self.regularization(h, type='H1')
+        return inner(u_mid,f)*J(uhat)*ufl.dx + self.regularization(h, type='L2')
     
     def tip_disp(self,u_mid,uhat,dxx):
         return Constant(self.mesh, 0.5)*inner(u_mid,u_mid)*J(uhat)*dxx
