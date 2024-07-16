@@ -81,7 +81,10 @@ class RMShellPDE:
 
     def mass(self,uhat,h,rho):
         return rho*h*J(uhat)*dx
-
+    
+    def area_subdomain(self,uhat,dxx):
+        return J(uhat)*dxx
+    
     def elastic_energy(self,w,uhat,h,E):
         elastic_energy = self.elastic_model.elasticEnergy(E, h, 
                                         self.dx_inplane, self.dx_shear)
@@ -104,6 +107,17 @@ class RMShellPDE:
             alpha_form = Constant(self.mesh,1.0)*J(uhat)*dx
             alpha = assemble_scalar(form(alpha_form))
         return 1/alpha*pnorm
+    
+    def sum_stress_subdomain(self,w,uhat,h,E,nu,dxx):
+        """
+        Compute the p-norm of the stress
+        `rho` is the Constraint aggregation factor
+        """
+        shell_stress_RM = ShellStressRM(self.mesh, w, uhat, h, E, nu)
+        # stress on the top surface
+        vm_stress = shell_stress_RM.vonMisesStress(h/2)
+        sum_subdomain = vm_stress*J(uhat)*dxx
+        return sum_subdomain
 
     def von_Mises_stress(self,w,uhat,h,E,nu,surface='Top'):
         shell_stress_RM = ShellStressRM(self.mesh, w, uhat, h, E, nu)

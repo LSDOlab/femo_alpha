@@ -21,15 +21,20 @@ class RMShellModel:
                     it is the boundary location, otherwise returns False
     record: boolean to record the FEA model variables in xdmf format
     '''
-    def __init__(self, mesh: dolfinx.mesh, 
+    def __init__(self, mesh: dolfinx.mesh, mesh_tags=None, association_table=None,
                             shell_bc_func: callable=None, 
                             element_wise_material=False,
                             record=True):
         self.mesh = mesh
+        self.mesh_tags = mesh_tags
+        self.association_table = association_table
         self.shell_bc_func = shell_bc_func # shell bc information
         self.element_wise_material = element_wise_material
         self.record = record
         self.m, self.rho = 1e-6, 100
+
+        if mesh_tags is not None:
+            self.set_up_subdomains(mesh_tags)
 
         if shell_bc_func is not None:
             self.set_up_bcs(shell_bc_func)
@@ -38,6 +43,7 @@ class RMShellModel:
                              Example:\n \
                              def ClampedBoundary(x):\n \
                                 return np.less(x[1], 0.0)')
+            
         self.set_up_fea()
 
     def set_up_bcs(self, bc_locs_func): 
@@ -54,6 +60,9 @@ class RMShellModel:
 
         self.dss = ds_1(100) # custom ds measure for the Dirichlet BC
         self.dSS = dS_1(100) # custom ds measure for the Dirichlet BC
+
+    def set_up_subdomains(self, mesh_tags):
+        self.dxx = ufl.Measure('dx', domain=self.mesh, subdomain_data=mesh_tags)
 
     def set_up_fea(self):
         '''
@@ -110,6 +119,7 @@ class RMShellModel:
                         w,uhat,h,E,nu,
                         dx_reduced,m=self.m,rho=self.rho,
                         alpha=None,regularization=False)
+
         stress_form = shell_pde.von_Mises_stress(
                         w,uhat,h,E,nu,surface='Top')
         fea.add_input('thickness', h, init_val=0.001, record=self.record)
@@ -136,11 +146,27 @@ class RMShellModel:
         fea.add_output(name='pnorm_stress',
                         form=pnorm_stress_form,
                         arguments=['thickness','disp_solid','E', 'nu','uhat'])
+
         fea.add_field_output(name='stress',
                         form=stress_form,
                         arguments=['thickness','disp_solid','E', 'nu','uhat'],
-                        record=self.record)
+                        function_space=('DG',1),
+                        record=self.record,
+                        vtk=True)
         
+
+        if self.association_table is not None:
+            for _, subdomain in enumerate(self.association_table):
+                i = self.association_table[subdomain]
+                sum_stress_form = shell_pde.sum_stress_subdomain(
+                                w,uhat,h,E,nu,self.dxx(i))
+                area_form = shell_pde.area_subdomain(uhat, self.dxx(i))
+                fea.add_output(name='sum_stress_'+str(i),
+                            form=sum_stress_form,
+                            arguments=['thickness','disp_solid','E', 'nu','uhat'])
+                fea.add_output(name='area_'+str(i),
+                            form=area_form,
+                            arguments=['uhat'])
         self.fea = fea
         
     def evaluate(self, force_vector: csdl.Variable, 
@@ -186,8 +212,6 @@ class RMShellModel:
         shell_inputs.nu = nu[fenics_mesh_indices]
         shell_inputs.density = density[fenics_mesh_indices]
 
-
-
         # reshape the force matrix to vector and sort indices
         force_reshaping_model = ForceReshapingModel(shell_pde=self.shell_pde)
         reshaped_force = force_reshaping_model.evaluate(force_vector)
@@ -227,9 +251,18 @@ class RMShellModel:
         aggregated_stress.add_name('aggregated_stress')
         shell_outputs.aggregated_stress = aggregated_stress
 
+        if self.association_table is not None:
+            for _, subdomain in enumerate(self.association_table):
+                i = self.association_table[subdomain]
+                sum_stress_i = getattr(shell_outputs, 'sum_stress_'+str(i))
+                area_i = getattr(shell_outputs, 'area_'+str(i))
+                average_stress_i = sum_stress_i/area_i
+                setattr(shell_outputs, 'average_stress_'+str(i), average_stress_i)
+
         print('RM shell model evaluation completed.')
         print('-'*40)
         return shell_outputs
+
 
 class AggregatedStressModel:
     '''

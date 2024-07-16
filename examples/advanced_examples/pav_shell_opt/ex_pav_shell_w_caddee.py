@@ -13,7 +13,6 @@ Date: 2024-06-20
 import CADDEE_alpha as cd
 import csdl_alpha as csdl
 import numpy as np
-import lsdo_function_spaces as fs
 
 from VortexAD.core.vlm.vlm_solver import vlm_solver
 from BladeAD.core.airfoil.ml_airfoil_models.NACA_4412.naca_4412_model import NACA4412MLAirfoilModel
@@ -26,6 +25,7 @@ import aeroelastic_coupling_utils as acu
 import vedo
 import os
 
+import lsdo_function_spaces as fs
 fs.num_workers = 1     # uncommont this if projections break
 plot=False
 

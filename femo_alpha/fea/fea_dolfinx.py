@@ -3,7 +3,7 @@ The FEniCSx wrapper for variational forms and partial derivatives computation
 '''
 
 from femo_alpha.fea.utils_dolfinx import *
-from dolfinx.io import XDMFFile
+from dolfinx.io import XDMFFile, VTXWriter
 import ufl
 
 from dolfinx.fem.petsc import apply_lifting
@@ -115,11 +115,14 @@ class FEA(object):
             partials=partials,
         )
 
-    def add_field_output(self, name, form, arguments, record=False):
+    def add_field_output(self, name, form, arguments, 
+                         function_space=('CG', 1),
+                         record=False,
+                         vtk=False):
         '''
         Add field output variables to dicitionary
         '''
-        V = FunctionSpace(self.mesh, ('CG', 1))
+        V = FunctionSpace(self.mesh, function_space)
         output_func = Function(V)
         partials = []
         self.outputs_field_dict[name] = dict(
@@ -128,7 +131,7 @@ class FEA(object):
             shape=len(getFuncArray(output_func)),
             arguments=arguments,
             partials=partials,
-            recorder=self.createRecorder(name, record),
+            recorder=self.createRecorder(name, record, vtk=vtk),
             record=record
         )
 
@@ -203,10 +206,17 @@ class FEA(object):
         project(form, func, lump_mass=False)
 
 
-    def createRecorder(self, name, record=False):
-        recorder = None
-        if record or self.record:
-            recorder = XDMFFile(MPI.COMM_WORLD,
-                                self.recorder_path+'/record_'+name+'.xdmf', 'w')
-            recorder.write_mesh(self.mesh)
-        return recorder
+    def createRecorder(self, name, record=False, vtk=False):
+            recorder = None
+            if record or self.record:
+                if not vtk:
+                    recorder = XDMFFile(MPI.COMM_WORLD,
+                                        self.recorder_path+'/record_'+name+'.xdmf', 'w')
+                    recorder.write_mesh(self.mesh)
+                else:
+                    class Recorder:
+                        def write_function(s, u, t=0.0):
+                            with VTXWriter(MPI.COMM_WORLD, self.recorder_path+'/record_'+name+'.bp', u) as f:
+                                f.write(t)
+                    recorder = Recorder()
+            return recorder
