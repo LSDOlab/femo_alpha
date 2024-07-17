@@ -24,6 +24,7 @@ class RMShellModel:
     def __init__(self, mesh: dolfinx.mesh, mesh_tags=None, association_table=None,
                             shell_bc_func: callable=None, 
                             element_wise_material=False,
+                            PENALTY_BC=True,
                             record=True):
         self.mesh = mesh
         self.mesh_tags = mesh_tags
@@ -32,12 +33,13 @@ class RMShellModel:
         self.element_wise_material = element_wise_material
         self.record = record
         self.m, self.rho = 1e-6, 100
+        self.PENALTY_BC = PENALTY_BC
 
         if mesh_tags is not None:
             self.set_up_subdomains(mesh_tags)
 
         if shell_bc_func is not None:
-            self.set_up_bcs(shell_bc_func)
+            self.set_up_bcs(shell_bc_func, PENALTY_BC)
         else:
             raise ValueError('Please provide the shell bc location function.\n \
                              Example:\n \
@@ -46,20 +48,23 @@ class RMShellModel:
             
         self.set_up_fea()
 
-    def set_up_bcs(self, bc_locs_func): 
+    def set_up_bcs(self, bc_locs_func, PENALTY_BC): 
         '''
         Set up the boundary conditions for the shell model and the tip displacement
         ** helper function for aircraft optimization with clamped root bc **
         '''
-        mesh = self.mesh
+        if PENALTY_BC:
+            mesh = self.mesh
+            fdim = mesh.topology.dim - 1
+            ds_1 = createCustomMeasure(mesh, fdim, bc_locs_func, measure='ds', tag=100)
+            dS_1 = createCustomMeasure(mesh, fdim, bc_locs_func, measure='dS', tag=100)
 
-        fdim = mesh.topology.dim - 1
+            self.dss = ds_1(100) # custom ds measure for the Dirichlet BC
+            self.dSS = dS_1(100) # custom ds measure for the Dirichlet BC
+        else:
+            self.dss = None
+            self.dSS = None
 
-        ds_1 = createCustomMeasure(mesh, fdim, bc_locs_func, measure='ds', tag=100)
-        dS_1 = createCustomMeasure(mesh, fdim, bc_locs_func, measure='dS', tag=100)
-
-        self.dss = ds_1(100) # custom ds measure for the Dirichlet BC
-        self.dSS = dS_1(100) # custom ds measure for the Dirichlet BC
 
     def set_up_subdomains(self, mesh_tags):
         self.dxx = ufl.Measure('dx', domain=self.mesh, subdomain_data=mesh_tags)
@@ -76,7 +81,7 @@ class RMShellModel:
         dss = self.dss
         dSS = self.dSS
 
-        PENALTY_BC = True
+        PENALTY_BC = self.PENALTY_BC
 
         fea = FEA(mesh)
         fea.PDE_SOLVER = 'Newton'
@@ -94,6 +99,21 @@ class RMShellModel:
         # Add state to the PDE problem:
         w_space = shell_pde.W
         w = Function(w_space)
+
+        # Set up strong boundary condition
+        if not PENALTY_BC:
+            W = shell_pde.W
+            locate_BC1 = dolfinx.fem.locate_dofs_geometrical((W.sub(0), W.sub(0).collapse()[0]),
+                                                self.shell_bc_func)
+            locate_BC2 = dolfinx.fem.locate_dofs_geometrical((W.sub(1), W.sub(1).collapse()[0]),
+                                                self.shell_bc_func)
+            ubc =  Function(W)
+            with ubc.vector.localForm() as uloc:
+                uloc.set(0.)
+
+            bcs = [dolfinx.fem.dirichletbc(ubc, locate_BC1, W.sub(0)),
+                    dolfinx.fem.dirichletbc(ubc, locate_BC2, W.sub(1)),]
+            fea.bc = bcs
 
         # Simple isotropic material
         g = Function(shell_pde.W)
@@ -167,6 +187,8 @@ class RMShellModel:
                 fea.add_output(name='area_'+str(i),
                             form=area_form,
                             arguments=['uhat'])
+
+            
         self.fea = fea
         
     def evaluate(self, force_vector: csdl.Variable, 

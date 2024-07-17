@@ -724,9 +724,9 @@ def run_shell(mesh_container, condition:cd.aircraft.conditions.CruiseCondition, 
                                mesh_tags=mesh_tags, association_table=association_table,
                                shell_bc_func=clamped_boundary,
                                element_wise_material=True,
+                               PENALTY_BC = False,
                                record=True) # record=true doesn't work with 2 shell instances
-    # Customize the pnorm stress parameter
-    shell_model.rho = 10
+
     # shell_model = RMShellModel(wing_shell_mesh_fenics,
     #                            clamped_boundary,
     #                            record=True, # record=true doesn't work with 2 shell instances
@@ -736,16 +736,19 @@ def run_shell(mesh_container, condition:cd.aircraft.conditions.CruiseCondition, 
                                          node_disp,
                                          debug_mode=False)
     disp_extracted = shell_outputs.disp_extracted
+    disp_solid = shell_outputs.disp_solid
     stress:csdl.Variable = shell_outputs.stress
     print('max stress np', np.max(stress.value))
     max_stress:csdl.Variable = shell_outputs.aggregated_stress*stress_cf
     print("max stress", max_stress.value)
+    print("max displacement", max(disp_solid.value))
+    exit()
     print('Subdomain average stresses:')
     for _, subdomain in enumerate(association_table):
         i = association_table[subdomain]
         average_stress_i = getattr(shell_outputs, 'average_stress_'+str(i))
         print(subdomain, average_stress_i.value)
-    exit()
+
     tip_displacement:csdl.Variable = csdl.maximum(csdl.norm(disp_extracted, axes=(1,))) # assuming the tip displacement is the maximum displacement
     wing_mass:csdl.Variable = shell_outputs.mass
 
