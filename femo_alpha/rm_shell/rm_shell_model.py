@@ -25,14 +25,15 @@ class RMShellModel:
                             shell_bc_func: callable=None, 
                             element_wise_material=False,
                             PENALTY_BC=True,
-                            record=True):
+                            record=True,
+                            rho=100):
         self.mesh = mesh
         self.mesh_tags = mesh_tags
         self.association_table = association_table
         self.shell_bc_func = shell_bc_func # shell bc information
         self.element_wise_material = element_wise_material
         self.record = record
-        self.m, self.rho = 1e-6, 100
+        self.m, self.rho = 1e-6, rho
         self.PENALTY_BC = PENALTY_BC
 
         if mesh_tags is not None:
@@ -178,11 +179,28 @@ class RMShellModel:
         if self.association_table is not None:
             for _, subdomain in enumerate(self.association_table):
                 i = self.association_table[subdomain]
-                sum_stress_form = shell_pde.sum_stress_subdomain(
+                if i == -1:
+                    continue
+                stress_sums = shell_pde.sum_stress_subdomain(
                                 w,uhat,h,E,nu,self.dxx(i))
                 area_form = shell_pde.area_subdomain(uhat, self.dxx(i))
-                fea.add_output(name='sum_stress_'+str(i),
-                            form=sum_stress_form,
+                fea.add_output(name='sum_stress_x_'+str(i),
+                            form=stress_sums[0],
+                            arguments=['thickness','disp_solid','E', 'nu','uhat'])
+                fea.add_output(name='sum_stress_y_'+str(i),
+                            form=stress_sums[1],
+                            arguments=['thickness','disp_solid','E', 'nu','uhat'])
+                fea.add_output(name='sum_stress_z_'+str(i),
+                            form=stress_sums[2],
+                            arguments=['thickness','disp_solid','E', 'nu','uhat'])
+                fea.add_output(name='sum_stress_xy_'+str(i),
+                            form=stress_sums[3],
+                            arguments=['thickness','disp_solid','E', 'nu','uhat'])
+                fea.add_output(name='sum_stress_xz_'+str(i),
+                            form=stress_sums[4],
+                            arguments=['thickness','disp_solid','E', 'nu','uhat'])
+                fea.add_output(name='sum_stress_yz_'+str(i),
+                            form=stress_sums[5],
                             arguments=['thickness','disp_solid','E', 'nu','uhat'])
                 fea.add_output(name='area_'+str(i),
                             form=area_form,
@@ -276,10 +294,23 @@ class RMShellModel:
         if self.association_table is not None:
             for _, subdomain in enumerate(self.association_table):
                 i = self.association_table[subdomain]
-                sum_stress_i = getattr(shell_outputs, 'sum_stress_'+str(i))
+                if i == -1:
+                    continue
+                sum_stress_x_i = getattr(shell_outputs, 'sum_stress_x_'+str(i))
+                sum_stress_y_i = getattr(shell_outputs, 'sum_stress_y_'+str(i))
+                sum_stress_z_i = getattr(shell_outputs, 'sum_stress_z_'+str(i))
+                sum_stress_xy_i = getattr(shell_outputs, 'sum_stress_xy_'+str(i))
+                sum_stress_xz_i = getattr(shell_outputs, 'sum_stress_xz_'+str(i))
+                sum_stress_yz_i = getattr(shell_outputs, 'sum_stress_yz_'+str(i))
                 area_i = getattr(shell_outputs, 'area_'+str(i))
-                average_stress_i = sum_stress_i/area_i
-                setattr(shell_outputs, 'average_stress_'+str(i), average_stress_i)
+                average_stress_x_i = sum_stress_x_i/area_i
+                average_stress_y_i = sum_stress_y_i/area_i
+                average_stress_z_i = sum_stress_z_i/area_i
+                average_stress_xy_i = sum_stress_xy_i/area_i
+                average_stress_xz_i = sum_stress_xz_i/area_i
+                average_stress_yz_i = sum_stress_yz_i/area_i
+                setattr(shell_outputs, 'average_stress_'+str(i), [average_stress_x_i, average_stress_y_i, average_stress_z_i, 
+                                                                  average_stress_xy_i, average_stress_xz_i, average_stress_yz_i])
 
         print('RM shell model evaluation completed.')
         print('-'*40)

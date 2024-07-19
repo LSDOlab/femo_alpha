@@ -110,14 +110,26 @@ class RMShellPDE:
     
     def sum_stress_subdomain(self,w,uhat,h,E,nu,dxx):
         """
-        Compute the p-norm of the stress
-        `rho` is the Constraint aggregation factor
+        Computes the average stress in global coordiantes over a subdomain
         """
         shell_stress_RM = ShellStressRM(self.mesh, w, uhat, h, E, nu)
         # stress on the top surface
-        vm_stress = shell_stress_RM.vonMisesStress(h/2)
-        sum_subdomain = vm_stress*J(uhat)*dxx
-        return sum_subdomain
+        # vm_stress = shell_stress_RM.vonMisesStress(h/2)
+        # sum_subdomain = vm_stress*J(uhat)*dxx
+        sigma = shell_stress_RM.inplaneStress(h/2)
+        sigma_x = sigma[0,0]
+        sigma_y = sigma[1,1]
+        sigma_z = sigma[2,2]
+        sigma_xy = sigma[0,1]
+        sigma_xz = sigma[0,2]
+        sigma_yz = sigma[1,2]
+        sum_x = sigma_x*J(uhat)*dxx
+        sum_y = sigma_y*J(uhat)*dxx
+        sum_z = sigma_z*J(uhat)*dxx
+        sum_xy = sigma_xy*J(uhat)*dxx
+        sum_xz = sigma_xz*J(uhat)*dxx
+        sum_yz = sigma_yz*J(uhat)*dxx
+        return sum_x, sum_y, sum_z, sum_xy, sum_xz, sum_yz
 
     def von_Mises_stress(self,w,uhat,h,E,nu,surface='Top'):
         shell_stress_RM = ShellStressRM(self.mesh, w, uhat, h, E, nu)
