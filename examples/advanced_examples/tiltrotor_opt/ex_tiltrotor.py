@@ -75,7 +75,6 @@ def define_base_config(caddee : cd.CADDEE):
                                        compute_surface_area=False)
     # print(list(wing_geometry.function_names.values()))
 
-
     # Make ribs and spars
     num_ribs = 9
     spanwise_multiplicity = 5
@@ -222,56 +221,73 @@ def define_base_config(caddee : cd.CADDEE):
 
 
         # Proprotor meshes
-        ignore_names_left_prop = ['76', '77', '78', '79', '80', '81', #blade 1
-                        '82', '83', '84', '85', '86', '87', #blade 2
-                        '88', '89', '90', '91', '92', '93', #blade 3
-                        # '94', '95', '96', '97', '98', '99', #blade 4
-                        '94', '95', '98', '99', #blade 4 rib like surfaces
-                        '100', '101', '102', '103', '104', '105', #blade 5
-                        '106', '107', '108', '109', '110', '111', #blade 6
-                        '112', '113', '114', '115', '116', '117', #blade 7
-                        # '118', '119', '120', '121', '122', '123', #blade 8
-                        '118', '119', '122', '123'#blade 8 rib like surfaces
-        ]
-    
-        ignore_names_right_prop = ['132', '133', '134', '135', '136', '137', #blade 1
-                                   '138', '139', '140', '141', '142', '143',#blade 2
-                                   '144', '145', '146', '147', '148', '149',#blade 3
-                                #    '150', '151', '152', '153', '154', '155',#blade 4
-                                    '150', '151', '154', '155',#blade 4 rib like surfaces
-                                   '156', '157', '158', '159', '160', '161',#blade 5
-                                   '162', '163', '164', '165', '166', '167',#blade 6
-                                   '168', '169', '170', '171', '172', '173',#blade 7
-                                #    '174', '175', '176', '177', '178', '179'#blade 8
-                                    '174', '175', '178', '179' #blade 8 rib like surfaces
-                                   ]
         left_prop_geometry = aircraft.create_subgeometry(
             search_names=["Prop_1"],
-            ignore_names=ignore_names_left_prop
         )
         right_prop_geometry = aircraft.create_subgeometry(
             search_names=["Prop_4"],
-            ignore_names=ignore_names_right_prop
         )
 
-        left_prop_surface = cd.mesh.make_rotor_panel_mesh(
+        left_prop_blade_3_geometry = aircraft.create_subgeometry(
+            search_names=["Prop_1, 3, 7, lower, 96", "Prop_1, 3, 10, upper, 97"],
+        )
+        left_prop_blade_7_geometry = aircraft.create_subgeometry(
+            search_names=["Prop_1, 7, 7, lower, 120", "Prop_1, 7, 10, upper, 121"],
+        )
+        right_prop_blade_3_geometry = aircraft.create_subgeometry(
+            search_names=["Prop_4, 3, 7, lower, 152", "Prop_4, 3, 10, upper, 153"],
+        )
+        right_prop_blade_7_geometry = aircraft.create_subgeometry(
+            search_names=["Prop_4, 7, 7, lower, 176", "Prop_4, 7, 10, upper, 177"],
+        )
+
+        # TODO: (alternative rotor mesher) fix the spacing of the blade surface mesh to be linspace
+        # left_prop_blade_3_surface = cd.mesh.make_blade_panel_mesh(
+        #     left_prop_blade_3_geometry, 10, 5, LE_interp="ellipse", TE_interp="ellipse", 
+        #     spacing_spanwise="linear", spacing_chordwise="linear",
+        #     surface_id = [96, 97],
+        #     ignore_camber=True, plot=True,
+        # )
+
+
+        left_prop_blade_3_surface = cd.mesh.make_rotor_panel_mesh(
             left_prop_geometry,
-            blade_keys = [96, 97, 120, 121], # upper and lower surfaces of 2 blades
+            blade_keys = [96, 97], # upper and lower surfaces
             grid_nr = 5,
             grid_nl = 10,
             plot=False,
         )
-        right_prop_surface = cd.mesh.make_rotor_panel_mesh(
+        # left_prop_geometry.plot_meshes(left_prop_blade_3_surface.nodal_coordinates)
+
+        left_prop_blade_7_surface = cd.mesh.make_rotor_panel_mesh(
+            left_prop_geometry,
+            blade_keys = [120, 121], # upper and lower surfaces
+            grid_nr = 5,
+            grid_nl = 10,
+            plot=False,
+        )
+        right_prop_blade_3_surface = cd.mesh.make_rotor_panel_mesh(
             right_prop_geometry,
-            blade_keys = [152, 153, 176, 177], # upper and lower surfaces of 2 blades
+            blade_keys = [152, 153], # upper and lower surfaces
             grid_nr = 5,
             grid_nl = 10,
             plot=False,
         )
-        panel_meshes.discretizations["left_proprotor_panel_surface"] = left_prop_surface
-        panel_meshes.discretizations["right_proprotor_panel_surface"] = right_prop_surface
+        right_prop_blade_7_surface = cd.mesh.make_rotor_panel_mesh(
+            right_prop_geometry,
+            blade_keys = [176, 177], # upper and lower surfaces
+            grid_nr = 5,
+            grid_nl = 10,
+            plot=False,
+        )
 
         # Store meshes
+
+        panel_meshes.discretizations["left_proprotor_blade_3_panel_surface"] = left_prop_blade_3_surface
+        panel_meshes.discretizations["right_proprotor_blade_3_panel_surface"] = right_prop_blade_3_surface
+        panel_meshes.discretizations["left_proprotor_blade_7_panel_surface"] = left_prop_blade_7_surface
+        panel_meshes.discretizations["right_proprotor_blade_7_panel_surface"] = right_prop_blade_7_surface
+
         mesh_container = base_config.mesh_container
         mesh_container["panel_meshes"] = panel_meshes
         if do_structural:
@@ -324,15 +340,19 @@ def run_panel_method(mesh_container, condition):
     '''
 
     panel_meshes = mesh_container['panel_meshes']
-    left_prop_mesh = panel_meshes.discretizations["left_proprotor_panel_surface"]
-    right_prop_mesh = panel_meshes.discretizations["right_proprotor_panel_surface"]
+    left_prop_blade_3_mesh = panel_meshes.discretizations["left_proprotor_blade_3_panel_surface"]
+    left_prop_blade_7_mesh = panel_meshes.discretizations["left_proprotor_blade_7_panel_surface"]
+    right_prop_blade_3_mesh = panel_meshes.discretizations["right_proprotor_blade_3_panel_surface"]
+    right_prop_blade_7_mesh = panel_meshes.discretizations["right_proprotor_blade_7_panel_surface"]
     left_nacelle_panel_mesh = panel_meshes.discretizations["left_nacelle_panel_surface"]
     right_nacelle_panel_mesh = panel_meshes.discretizations["right_nacelle_panel_surface"]
     wing_panel_mesh = panel_meshes.discretizations["wing_panel_surface"]
 
     if plot_meshes:
-        tiltrotor_geom.plot_meshes([left_prop_mesh.nodal_coordinates, 
-                                    right_prop_mesh.nodal_coordinates,
+        tiltrotor_geom.plot_meshes([left_prop_blade_3_mesh.nodal_coordinates, 
+                                    left_prop_blade_7_mesh.nodal_coordinates,
+                                    right_prop_blade_3_mesh.nodal_coordinates, 
+                                    right_prop_blade_7_mesh.nodal_coordinates,
                                     left_nacelle_panel_mesh.nodal_coordinates, 
                                     right_nacelle_panel_mesh.nodal_coordinates, 
                                     wing_panel_mesh.nodal_coordinates, ])
