@@ -223,7 +223,8 @@ if run_optimization:
 
     prob = CSDLAlphaProblem(problem_name='beam_thickness', simulator=sim)
 
-    optimizer = SLSQP(prob, ftol=1e-9, maxiter=1000, outputs=['x'])
+    optimizer = SLSQP(prob, solver_options={'maxiter':1000, 'ftol':1e-9}) 
+    # optimizer = SLSQP(prob, ftol=1e-9, maxiter=1000, outputs=['x'])
 
     # Solve your optimization problem
     optimizer.solve()

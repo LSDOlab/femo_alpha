@@ -54,7 +54,7 @@ def define_base_config(caddee: cd.CADDEE):
     AR = csdl.Variable(value=5, name='AR')
     S_ref = csdl.Variable(value=15, name='S_ref')
     span = csdl.Variable(value=8.4, name='span')
-    taper_ratio = csdl.Variable(value=0.4, name='taper_ratio')
+    taper_ratio = csdl.Variable(value=0.1, name='taper_ratio')
     wing = cd.aircraft.components.Wing(
         AR=AR, S_ref=None, span=span, geometry=wing_geometry, tight_fit_ffd=False,
     )
@@ -179,7 +179,22 @@ def define_base_config(caddee: cd.CADDEE):
     mesh_container["shell_mesh"] = pav_shell_mesh
     caddee.base_configuration = base_config
 
-    # base_config.setup_geometry(plot=plot)
+    geo_plot = wing.geometry.plot(opacity=0.3, show=False)
+    vedo_mesh_2 = vedo.Mesh([nodes.value, connectivity]).wireframe()
+    vedo_mesh_2.color('blue')
+    plotter = vedo.Plotter()
+    plotter.show([geo_plot, vedo_mesh_2], axes=1, viewup='z')
+
+    base_config.setup_geometry(plot=plot)
+
+    geo_plot = wing.geometry.plot(opacity=0.3, show=False)
+    new_nodes = wing.geometry.evaluate(wing_shell_discritization.nodes_parametric)
+    vedo_mesh_3 = vedo.Mesh([new_nodes.value, connectivity]).wireframe()
+    vedo_mesh_3.color('red')
+    plotter = vedo.Plotter()
+    plotter.show([geo_plot, vedo_mesh_3], axes=1, viewup='z')
+    exit()
+
 
 
 
@@ -282,6 +297,8 @@ def define_analysis(caddee: cd.CADDEE, pitch_angle=None):
     node_disp = new_nodes - nodes.reshape((-1, 3))
     node_disp.add_name('node_disp')
 
+
+
     #####################################################################
     # TODO: make sure the force and pressure projection are correct
     # shell_forces = force_function.evaluate(nodes_parametric)
@@ -338,18 +355,18 @@ def define_analysis(caddee: cd.CADDEE, pitch_angle=None):
                                record = True) # record flag for saving the structure outputs as # xdmf files
     
     ## Aerodynamic loads as directed nodal pressures
-    # shell_outputs = shell_model.evaluate(directed_pressures, # force_vector
-    #                         thickness, E, nu, density, # material properties
-    #                         node_disp,                 # mesh deformation
-    #                         debug_mode=False,
-    #                         is_pressure=True)          # debug mode flag
-    # Aerodynamic loads as directed nodal forces
-
-    shell_outputs = shell_model.evaluate(shell_forces, # force_vector
+    shell_outputs = shell_model.evaluate(directed_pressures, # force_vector
                             thickness, E, nu, density, # material properties
                             node_disp,                 # mesh deformation
                             debug_mode=False,
-                            is_pressure=False)          # debug mode flag
+                            is_pressure=True)          # debug mode flag
+    
+    # Aerodynamic loads as directed nodal forces
+    # shell_outputs = shell_model.evaluate(shell_forces, # force_vector
+    #                         thickness, E, nu, density, # material properties
+    #                         node_disp,                 # mesh deformation
+    #                         debug_mode=False,
+    #                         is_pressure=False)          # debug mode flag
 
     # Demostrate all the shell outputs even if they might not be used
     disp_solid = shell_outputs.disp_solid # displacement on the shell mesh
@@ -394,17 +411,6 @@ def define_analysis(caddee: cd.CADDEE, pitch_angle=None):
     print("Wing maximum von Mises stress (Pascal):", max(wing_von_Mises_stress.value))
     print("number of elements:", shell_model.fea.nel)   
     print("number of vertices:", shell_model.fea.nn)
-
-
-    # geo_plot = wing.geometry.plot(opacity=0.5, show=False)
-    # geo_plot_2 = wing.geometry.plot(opacity=0.5, plot_types=['point_cloud'], 
-    #                                 point_types=['coefficients'], show=False)
-    # vedo_mesh_2 = vedo.Mesh([nodes.value[0,:,:], connectivity]).wireframe()
-    # vedo_mesh_2.color('blue')
-    # vedo_mesh_3 = vedo.Mesh([new_nodes.value, connectivity]).wireframe()
-    # vedo_mesh_3.color('red')
-    # plotter = vedo.Plotter()
-    # plotter.show([geo_plot, geo_plot_2, vedo_mesh_2, vedo_mesh_3], axes=1, viewup='z')
 
 
     AR = wing.parameters.AR

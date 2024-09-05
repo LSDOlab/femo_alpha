@@ -190,6 +190,86 @@ class RMShellModel:
 
             
         self.fea = fea
+
+    def evaluate_modal_fea(self, shell_pde, E_val, nu_val, h_val, density_val):
+        from femo_alpha.rm_shell.linear_shell_fenicsx.linear_shell_model import (MaterialModel, 
+                                                                          ElasticModelModal)
+        w = Function(shell_pde.W)
+        h = Function(shell_pde.VT)
+        E = Function(shell_pde.VT)
+        nu = Function(shell_pde.VT)
+        density = Function(shell_pde.VT)
+        h.x.array[:] = h_val
+        E.x.array[:] = E_val
+        nu.x.array[:] = nu_val
+        density.x.array[:] = density_val
+        material_model = MaterialModel(E=E,nu=nu,h=h)
+        elastic_model_modal = ElasticModelModal(self.mesh,
+                                                w, material_model.CLT)
+        elastic_energy = elastic_model_modal.elasticEnergy(E, h)
+        f_0 = dolfinx.fem.Constant(shell_pde.mesh, (0.0,0.0,0.0))
+        elastic_res = elastic_model_modal.weakFormResidual(elastic_energy, f_0)
+
+        K = ufl.derivative(elastic_res, w)
+        K_compiled = dolfinx.fem.form(K)
+        
+        inertia_res = elastic_model_modal.inertialResidual(density, h)
+        M = ufl.derivative(inertia_res, w)
+        M_compiled = dolfinx.fem.form(M)
+
+        hh = ufl.TrialFunction(shell_pde.VT)
+        dKdh = ufl.derivative(K, h, hh)
+        dMdh = ufl.derivative(M, h, hh)
+        dKdh = ufl.replace(dKdh, {hh: h})
+        dMdh = ufl.replace(dMdh, {hh: h})
+
+        dKdh_compiled = dolfinx.fem.form(dKdh)
+        dMdh_compiled = dolfinx.fem.form(dMdh)
+
+        # print(dolfinx.fem.assemble_scalar(dolfinx.fem.form(elastic_energy)))
+        # print(dolfinx.fem.petsc.assemble_vector(dolfinx.fem.form(elastic_res)).getArray())
+        
+        # K_mat = dolfinx.fem.petsc.assemble_matrix(K_compiled, self.fea.bc)
+        # # K_mat = dolfinx.fem.petsc.assemble_matrix(K_compiled)
+        # K_mat.assemble()
+        # K_dense = K_mat.convert("dense")
+        # print(K_mat.getSize())
+        # print(K_dense.getDenseArray())
+        
+        # M_mat = dolfinx.fem.petsc.assemble_matrix(M_compiled)
+        # M_mat.assemble()
+        # M_dense = M_mat.convert("dense")
+        # print(M_mat.getSize())
+        # print(M_dense.getDenseArray())
+        # exit()
+        dKdh_list = []
+        dMdh_list = []
+
+        # [RX] this process is extremely memory intensive. 
+        #  It takes ~7GB of memory for a 10x50 mesh
+        for i in range(len(h.x.array)):
+            h.x.array[:] = 0.0
+            h.x.array[i] = 0.2
+            print("-------------------------")
+            print("     Iteration: ", i)
+            print("-------------------------")
+            h.x.scatter_forward()
+            # print("h: ", h.x.array)
+
+            dKdh_mat_i = dolfinx.fem.petsc.assemble_matrix(dKdh_compiled)
+            # dKdh_mat_i = dolfinx.fem.petsc.assemble_matrix(dKdh_compiled, self.fea.bc)
+            dKdh_mat_i.assemble()
+            dMdh_mat_i = dolfinx.fem.petsc.assemble_matrix(dMdh_compiled)
+            dMdh_mat_i.assemble()
+            dKdh_list.append(dKdh_mat_i)
+            dMdh_list.append(dMdh_mat_i)
+            print(dKdh_mat_i.convert("dense").getDenseArray())
+            print(dMdh_mat_i.convert("dense").getDenseArray())
+            # dKdh_list.append(dKdh_mat_i.convert("dense").getDenseArray())
+            # dMdh_list.append(dMdh_mat_i.convert("dense").getDenseArray())
+        # print("dKdh_list: ", dKdh_list)
+        # print("dMdh_list: ", dMdh_list)
+        # exit()
         
     def evaluate(self, force_vector: csdl.Variable, 
                 thickness: csdl.Variable,
@@ -248,6 +328,13 @@ class RMShellModel:
             shell_inputs.F_solid = pressure
         shell_inputs.F_solid.add_name('F_solid')
 
+        # print("="*40)
+        # F_solid_func = Function(self.shell_pde.VF)
+        # F_solid_func.x.array[:] = shell_inputs.F_solid.value
+        # print("Total aero force projected to solid: {}".format(
+        #     [dolfinx.fem.assemble_scalar(dolfinx.fem.form(F_solid_func[i]*ufl.dx)) for i in range(3)]))
+        # print("="*40)
+
         # sort the nodal mesh deformation based on FEniCS indices
         if node_disp is None:
             node_disp = csdl.Variable(value=0.0, shape=force_vector.shape, 
@@ -283,6 +370,14 @@ class RMShellModel:
 
         print('RM shell model evaluation completed.')
         print('-'*40)
+
+
+        # self.evaluate_modal_fea(self.shell_pde, 
+        #                       shell_inputs.E.value, 
+        #                       shell_inputs.nu.value, 
+        #                       shell_inputs.thickness.value, 
+        #                       shell_inputs.density.value)
+
         return shell_outputs
 
 

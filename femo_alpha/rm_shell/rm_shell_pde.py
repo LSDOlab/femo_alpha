@@ -48,8 +48,13 @@ class RMShellPDE:
                                                 w, uhat, material_model.CLT)
         elastic_energy = elastic_model.elasticEnergy(E, h,
                                     self.dx_inplane,self.dx_shear)
-        return elastic_model.weakFormResidual(elastic_energy, f,
+        res = elastic_model.weakFormResidual(elastic_energy, f,
                                             penalty=penalty, dss=dss, dSS=dSS, g=g)
+        return res
+        # # Inertia relief
+        # f_d = ufl.as_vector([0.,0.,-rho*h*g])
+        # res -= inner(f_d,elastic_model.du_mid)*J(uhat)*dx
+        # return res
 
     def regularization(self, h, type=None):
         alpha1 = Constant(self.mesh, 1e1)
