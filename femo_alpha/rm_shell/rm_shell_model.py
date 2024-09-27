@@ -24,6 +24,7 @@ class RMShellModel:
     def __init__(self, mesh: dolfinx.mesh, mesh_tags=None, association_table=None,
                             shell_bc_func: callable=None, 
                             element_wise_material=False,
+                            rho=100,
                             PENALTY_BC=True,
                             record=True):
         self.mesh = mesh
@@ -32,8 +33,11 @@ class RMShellModel:
         self.shell_bc_func = shell_bc_func # shell bc information
         self.element_wise_material = element_wise_material
         self.record = record
-        self.m, self.rho = 1e-6, 100
+        self.m, self.rho = 1e-6, rho
         self.PENALTY_BC = PENALTY_BC
+
+        self.nel = mesh.topology.index_map(mesh.topology.dim).size_local
+        self.nn = mesh.topology.index_map(0).size_local
 
         if mesh_tags is not None:
             self.set_up_subdomains(mesh_tags)
@@ -310,6 +314,7 @@ class RMShellModel:
         else:
             fenics_mesh_indices = self.shell_pde.mesh.geometry.input_global_indices
         shell_inputs.thickness = thickness[fenics_mesh_indices]
+
         shell_inputs.E = E[fenics_mesh_indices]
         shell_inputs.nu = nu[fenics_mesh_indices]
         shell_inputs.density = density[fenics_mesh_indices]

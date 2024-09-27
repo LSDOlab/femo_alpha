@@ -33,6 +33,7 @@ class RMShellPDE:
         self.dx_inplane, self.dx_shear = element.dx_inplane, element.dx_shear
 
         self.W  = self.element.W
+        self.element_wise_material = element_wise_material
         if element_wise_material:
             self.VT = FunctionSpace(mesh, ("DG", 0))
         else:
@@ -57,7 +58,9 @@ class RMShellPDE:
         # return res
 
     def regularization(self, h, type=None):
-        alpha1 = Constant(self.mesh, 1e1)
+        # alpha1 = Constant(self.mesh, 1e1)
+        # alpha2 = Constant(self.mesh, 1e0)
+        alpha1 = Constant(self.mesh, 1e-2)
         alpha2 = Constant(self.mesh, 1e0)
         h_mesh = CellDiameter(self.mesh)
 
@@ -76,7 +79,14 @@ class RMShellPDE:
         return regularization
 
     def compliance(self,u_mid,uhat,h,f):
-        return inner(u_mid,f)*J(uhat)*ufl.dx + self.regularization(h, type='L2')
+        if self.element_wise_material:
+            return inner(u_mid,u_mid)*J(uhat)*ufl.dx + self.regularization(h, type='L2')
+        else:
+            return inner(u_mid,u_mid)*J(uhat)*ufl.dx + self.regularization(h, type='H1')
+        # if self.element_wise_material:
+        #     return inner(u_mid,f)*J(uhat)*ufl.dx + self.regularization(h, type='L2')
+        # else:
+        #     return inner(u_mid,f)*J(uhat)*ufl.dx + self.regularization(h, type='H1')
     
     def tip_disp(self,u_mid,uhat,dxx):
         return Constant(self.mesh, 0.5)*inner(u_mid,u_mid)*J(uhat)*dxx
