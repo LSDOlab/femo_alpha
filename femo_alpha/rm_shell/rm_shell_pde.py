@@ -13,7 +13,8 @@ from ufl import TestFunction, TrialFunction, dx, inner, CellDiameter, dot, grad
 from femo_alpha.rm_shell.linear_shell_fenicsx.linear_shell_model import (ShellElement,
                                                                     ShellStressRM,
                                                                     MaterialModel,
-                                                                    ElasticModelShapeOpt)
+                                                                    ElasticModelShapeOpt,
+                                                                    ElasticModelDynamic)
 from femo_alpha.rm_shell.linear_shell_fenicsx.utils import computeNodalDisp
 from femo_alpha.rm_shell.linear_shell_fenicsx.kinematics import J
 
@@ -22,10 +23,9 @@ class RMShellPDE:
     '''
     Class for the PDE of the Reissner-Mindlin shell element and essential outputs
     '''
-    def __init__(self, mesh, element_wise_material=False):
+    def __init__(self, mesh, element_type="CG2CG1",
+                    element_wise_material=False):
         self.mesh = mesh
-        element_type = "CG2CG1"
-        #element_type = "CG2CR1"
 
         self.element = element = ShellElement(
                         mesh,
@@ -55,6 +55,16 @@ class RMShellPDE:
         # f_d = ufl.as_vector([0.,0.,-rho*h*g])
         # res -= inner(f_d,elastic_model.du_mid)*J(uhat)*dx
         # return res
+
+    def dynamic_residual(self, w, wdot, wddot, f, rho, h, E, nu,
+                        penalty=False, g=None, dss=None, dSS=None):
+
+        material_model = MaterialModel(E=E,nu=nu,h=h)
+        elastic_model = ElasticModelDynamic(self.mesh,
+                                                w, material_model.CLT)
+        return elastic_model.dynamicResidual(w=w, wdot=wdot, wddot=wddot, 
+                                             f=f, rho=rho, h=h, E=E,
+                                    penalty=penalty, g=g, dss=dss, dSS=dSS)
 
     def regularization(self, h, type=None):
         alpha1 = Constant(self.mesh, 1e1)
@@ -183,13 +193,18 @@ class RMShellPDE:
         return A_sp
     
 
-    def construct_nodal_disp_map(self):
+    def construct_nodal_disp_map(self, element_type="CG2CG1"):
         deriv_us_to_ua_coord_list = []
-        Q_map = self.construct_CG2_CG1_interpolation_map()
         disp_extraction_mats = self.construct_disp_extraction_mats()
-        for i in range(3):
-            deriv_us_to_ua_coord_list += [sp.csr_matrix(
-                                            Q_map@disp_extraction_mats[i])]
+        if element_type == "CG2CG1":
+            Q_map = self.construct_CG2_CG1_interpolation_map()
+            for i in range(3):
+                deriv_us_to_ua_coord_list += [sp.csr_matrix(
+                                                Q_map@disp_extraction_mats[i])]
+        elif element_type == "CG1CG1":
+            for i in range(3):
+                deriv_us_to_ua_coord_list += [sp.csr_matrix(disp_extraction_mats[i])]
+
         disp_extraction_mats = sp.vstack(deriv_us_to_ua_coord_list)
         # print(disp_extraction_mats.shape)
         return disp_extraction_mats
@@ -265,3 +280,33 @@ class RMShellPDE:
         basis_vec = sp.csr_array((c_tab, (c_tab.shape[0]*[int(x_idx)], geom_dofs)), shape=mat_shape)
 
         return basis_vec
+
+
+from dolfinx.nls.petsc import NewtonSolver
+from mpi4py import MPI
+from dolfinx.fem.petsc import NonlinearProblem
+from petsc4py import PETSc
+def solveNonlinear(F, w, bcs, abs_tol=1e-50, max_it=3, log=False):
+
+    """
+    Wrap up the nonlinear solver for the problem F(w)=0 and
+    returns the solution
+    """
+
+    problem = NonlinearProblem(F, w, bcs)
+
+    # Set the initial guess of the solution
+    with w.vector.localForm() as w_local:
+        w_local.set(0.1)
+    solver = NewtonSolver(MPI.COMM_WORLD, problem)
+    if log is True:
+        dolfinx.log.set_log_level(dolfinx.log.LogLevel.INFO)
+
+    # Set the Newton solver options
+    solver.atol = abs_tol
+    solver.max_it = max_it
+    solver.error_on_nonconvergence = False
+    opts = PETSc.Options()
+    opts["nls_solve_pc_factor_mat_solver_type"] = "mumps"
+    solver.solve(w)
+

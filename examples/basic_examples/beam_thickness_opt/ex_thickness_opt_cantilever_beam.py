@@ -235,16 +235,17 @@ if run_optimization:
     # print(" "*4, thickness.names, thickness.value)
     print("OpenMDAO compliance: "+str(23762.153677443166))
 
-    fig, ax = plt.subplots()
-    ax.plot(np.linspace(0.0,L,50), thick_ref, "b--", 
-                        label="OpenMDAO results")
-    ax.plot(np.linspace(0.0,L,nel), thickness.value, "r.",
-                        label="FEMO results")
-    ax.set_xlabel("x")
-    ax.set_ylabel("optimized thickness distribution")
-    ax.legend(loc="best")
-    plt.show()
-    fig.savefig("beam_thickness_distribution.png", dpi=150)
+    # fig, ax = plt.subplots()
+
+    # ax.plot(np.linspace(0.0,L,50), thick_ref, "b--", 
+    #                     label="OpenMDAO results")
+    # ax.plot(np.linspace(0.0,L,nel), thickness.value, "r.",
+    #                     label="FEMO results")
+    # ax.set_xlabel("x")
+    # ax.set_ylabel("optimized thickness distribution")
+    # ax.legend(loc="best")
+    # plt.show()
+    # fig.savefig("beam_thickness_distribution.png", dpi=150)
 
 recorder.stop()
 

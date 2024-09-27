@@ -32,6 +32,7 @@ class FEA(object):
         self.states_dict = dict()
         self.outputs_dict = dict()
         self.outputs_field_dict = dict()
+        self.outputs_residual_dict = dict()
         self.bc = []
 
         self.PDE_SOLVER = 'Newton'
@@ -134,6 +135,21 @@ class FEA(object):
             recorder=self.createRecorder(name, record, vtk=vtk),
             record=record
         )
+
+    def add_residual_output(self, name, form, arguments, 
+                         shape=None,
+                         record=False):
+        '''
+        Add residual output variables to dicitionary
+        '''
+        partials = []
+        self.outputs_residual_dict[name] = dict(
+            form=form,
+            shape=shape,
+            arguments=arguments,
+            partials=partials,
+        )
+
 
     def add_exact_solution(self, Expression, function_space):
         '''

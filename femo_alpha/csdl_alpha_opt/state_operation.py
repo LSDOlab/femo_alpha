@@ -106,6 +106,9 @@ class StateOperation(csdl.experimental.CustomImplicitOperation):
                                                self.fea.opt_iter)
         
         # solve the residual equation
+        print(self.state_name)
+        print('solving residual equations...')
+        
         self.fea.solve(
             self.fea_state['residual_form'], 
             self.fea_state['function'], 

@@ -128,3 +128,87 @@ class OutputFieldOperation(csdl.CustomExplicitOperation):
             )
 
 
+class OutputResidualOperation(csdl.CustomExplicitOperation):
+    """
+    input: input/state variables
+    output: output
+    """
+
+    def __init__(self, fea, args_name_list, output_name):
+        super().__init__()
+
+        # define any checks for the parameters
+        csdl.check_parameter(fea, "fea", types=FEA)
+        csdl.check_parameter(args_name_list, "args_name_list", types=list)
+        csdl.check_parameter(output_name, "output_name", types=str)
+
+        args_dict = dict()
+        for arg_name in args_name_list:
+            if arg_name in fea.inputs_dict:
+                args_dict[arg_name] = fea.inputs_dict[arg_name]
+            elif arg_name in fea.states_dict:
+                args_dict[arg_name] = fea.states_dict[arg_name]
+
+        # assign parameters to the class
+        self.fea = fea
+        self.args_dict = args_dict
+        self.output_name = output_name
+        self.fea_output = fea.outputs_residual_dict[output_name]
+        self.output_dim = 1 # for residual outputs
+
+        self.partials = dict()
+        self.num_compute_derivatives = 0
+        self.iteration = 0
+
+    def evaluate(self, inputs: csdl.VariableGroup):
+        # assign method inputs to input dictionary
+        for arg_name in self.args_dict:
+            if getattr(inputs, arg_name) is not None:
+                self.declare_input(arg_name, getattr(inputs, arg_name))
+            else:
+                raise ValueError(f"Variable {arg_name} not found in the FEA model.")
+
+        # declare output variables
+        output = self.create_output(self.output_name, (self.fea_output['shape'],))
+        output.add_name(self.output_name)
+
+        # declare any derivative parameters
+        self.declare_derivative_parameters(self.output_name, '*', dependent=True)
+        return output
+
+    def compute(self, input_vals, output_vals):
+        print("-"*40)
+        print("Iteration number: ", self.iteration)
+        self.iteration += 1
+        for arg_name in input_vals:
+            arg = self.args_dict[arg_name]                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              
+            update(arg['function'], input_vals[arg_name])
+            print(arg_name+" norm:", np.linalg.norm(arg['function'].vector.array))
+
+        output_vals[self.output_name] = assemble(self.fea_output['form'], 
+                                                    dim=self.output_dim)
+        
+        print("Residual norm: ", np.linalg.norm(output_vals[self.output_name]))
+
+    def compute_derivatives(self, input_vals, output_vals, derivatives):
+        for arg_name in input_vals:
+            arg = self.args_dict[arg_name]
+            update(arg["function"], input_vals[arg_name])
+
+        if self.num_compute_derivatives == 0:
+            for arg_name in input_vals:
+                derivatives[self.output_name, arg_name] = self.assemble_partials(arg_name)
+                print(arg_name+" partial norm:", np.linalg.norm(derivatives[self.output_name, arg_name]))
+                print(arg_name+" partial determinant:", np.linalg.det(derivatives[self.output_name, arg_name]))
+            self.partials = derivatives
+            self.num_compute_derivatives += 1
+        else:        
+            derivatives[self.output_name, arg_name] = self.partials[self.output_name, arg_name]
+
+    def assemble_partials(self, arg_name):
+        return assemble(computePartials(
+                    self.fea_output["form"], self.args_dict[arg_name]["function"]
+                ),
+                dim=self.output_dim + 1,
+            )
+

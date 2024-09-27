@@ -1,6 +1,8 @@
 # This file contains the class FEAModel, which is used to evaluate all of the FEA variables
 from femo_alpha.csdl_alpha_opt.state_operation import StateOperation
-from femo_alpha.csdl_alpha_opt.output_operation import OutputOperation, OutputFieldOperation
+from femo_alpha.csdl_alpha_opt.output_operation import (OutputOperation, 
+                                                        OutputFieldOperation,
+                                                        OutputResidualOperation)
 import csdl_alpha as csdl
 
 class FEAModel():
@@ -35,7 +37,6 @@ class FEAModel():
                                             state_name=state_name,
                                             args_name_list=args_name_list_state,
                                             debug_mode=debug_mode)
-
                 state = state_operation.evaluate(fea_variable_dict)
 
                 # add the state variable to the dictionary
@@ -55,6 +56,16 @@ class FEAModel():
             for output_name in fea.outputs_field_dict:
                 args_name_list_output = fea.outputs_field_dict[output_name]['arguments']
                 output_operation = OutputFieldOperation(fea=fea,
+                                            output_name=output_name,
+                                            args_name_list=args_name_list_output)
+                output = output_operation.evaluate(fea_variable_dict)
+
+                # add the output variable to the dictionary
+                setattr(fea_variable_dict, output_name, output)
+
+            for output_name in fea.outputs_residual_dict:
+                args_name_list_output = fea.outputs_residual_dict[output_name]['arguments']
+                output_operation = OutputResidualOperation(fea=fea,
                                             output_name=output_name,
                                             args_name_list=args_name_list_output)
                 output = output_operation.evaluate(fea_variable_dict)
