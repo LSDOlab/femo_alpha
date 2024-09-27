@@ -22,7 +22,7 @@ class RMShellPDE:
     '''
     Class for the PDE of the Reissner-Mindlin shell element and essential outputs
     '''
-    def __init__(self, mesh, element_wise_material=False):
+    def __init__(self, mesh, element_wise_material=False, elementwise_pressure=False):
         self.mesh = mesh
         element_type = "CG2CG1"
         #element_type = "CG2CR1"
@@ -38,7 +38,11 @@ class RMShellPDE:
             self.VT = FunctionSpace(mesh, ("DG", 0))
         else:
             self.VT = FunctionSpace(mesh, ("CG", 1))
-        self.VF = VectorFunctionSpace(mesh, ("CG", 1))
+        if elementwise_pressure:
+            self.VF = VectorFunctionSpace(mesh, ("DG", 0))
+        else:
+            self.VF = VectorFunctionSpace(mesh, ("CG", 1))
+        self.VU = VectorFunctionSpace(mesh, ("CG", 1))
         self.bf_sup_sizes = assemble_vector(
                 form(TestFunction(self.VF.sub(0).collapse()[0])*dx)).getArray()
         # self.bf_sup_sizes = np.ones_like(self.bf_sup_sizes)

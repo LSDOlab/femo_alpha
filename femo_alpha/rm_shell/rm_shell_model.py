@@ -20,13 +20,20 @@ class RMShellModel:
     shell_bc_func: callable for shell Dirichlet BC locations - returns True if 
                     it is the boundary location, otherwise returns False
     record: boolean to record the FEA model variables in xdmf format
+    element_wise_material: boolean to indicate if the material properties are
+                            element-wise or nodal-wise
+    PENALTY_BC: boolean to indicate if the Dirichlet BC is enforced using penalty
+                method
+    elementwise_pressure: boolean to indicate if the pressure is element-wise or
+                            nodal-wise
     '''
     def __init__(self, mesh: dolfinx.mesh, mesh_tags=None, association_table=None,
                             shell_bc_func: callable=None, 
                             element_wise_material=False,
                             rho=100,
                             PENALTY_BC=True,
-                            record=True):
+                            record=True,
+                            elementwise_pressure=False):
         self.mesh = mesh
         self.mesh_tags = mesh_tags
         self.association_table = association_table
@@ -38,6 +45,7 @@ class RMShellModel:
 
         self.nel = mesh.topology.index_map(mesh.topology.dim).size_local
         self.nn = mesh.topology.index_map(0).size_local
+        self.elementwise_pressure = elementwise_pressure
 
         if mesh_tags is not None:
             self.set_up_subdomains(mesh_tags)
@@ -81,7 +89,8 @@ class RMShellModel:
         print('Setting up the FEA model for RM shell analysis ...')
         mesh = self.mesh
         shell_pde = self.shell_pde = RMShellPDE(mesh, 
-                                                element_wise_material=self.element_wise_material)
+                                                element_wise_material=self.element_wise_material,
+                                                elementwise_pressure=self.elementwise_pressure)
         dss = self.dss
         dSS = self.dSS
 
@@ -98,7 +107,7 @@ class RMShellModel:
         E = Function(shell_pde.VT)
         nu = Function(shell_pde.VT)
         density = Function(shell_pde.VT)
-        uhat = Function(shell_pde.VF)
+        uhat = Function(shell_pde.VU)
 
         # Add state to the PDE problem:
         w_space = shell_pde.W
@@ -310,18 +319,20 @@ class RMShellModel:
         #:::::::::::::::::::::: Prepare the inputs :::::::::::::::::::::::::::::
         # sort the material properties based on FEniCS indices
         if self.element_wise_material:
-            fenics_mesh_indices = self.shell_pde.mesh.topology.original_cell_index.tolist()
+            material_mesh_indices = self.shell_pde.mesh.topology.original_cell_index.tolist()
         else:
-            fenics_mesh_indices = self.shell_pde.mesh.geometry.input_global_indices
-        shell_inputs.thickness = thickness[fenics_mesh_indices]
-
-        shell_inputs.E = E[fenics_mesh_indices]
-        shell_inputs.nu = nu[fenics_mesh_indices]
-        shell_inputs.density = density[fenics_mesh_indices]
+            material_mesh_indices = self.shell_pde.mesh.geometry.input_global_indices
+        shell_inputs.thickness = thickness[material_mesh_indices]
+        shell_inputs.E = E[material_mesh_indices]
+        shell_inputs.nu = nu[material_mesh_indices]
+        shell_inputs.density = density[material_mesh_indices]
 
         # reshape the force matrix to vector and sort indices
-        force_reshaping_model = ForceReshapingModel(shell_pde=self.shell_pde)
-        reshaped_force = force_reshaping_model.evaluate(force_vector)
+        if self.elementwise_pressure:
+            pressure_mesh_indices = self.shell_pde.mesh.topology.original_cell_index.tolist()
+        else:
+            pressure_mesh_indices = self.shell_pde.mesh.geometry.input_global_indices
+        reshaped_force = csdl.reshape(force_vector[pressure_mesh_indices], (-1,))
 
         if is_pressure:
             shell_inputs.F_solid = reshaped_force
@@ -341,10 +352,11 @@ class RMShellModel:
         # print("="*40)
 
         # sort the nodal mesh deformation based on FEniCS indices
+        deformation_mesh_indices = self.shell_pde.mesh.geometry.input_global_indices
         if node_disp is None:
-            node_disp = csdl.Variable(value=0.0, shape=force_vector.shape, 
+            node_disp = csdl.Variable(value=0.0, shape=(len(deformation_mesh_indices), 3), 
                                       name='node_disp')
-        reshaped_node_disp = force_reshaping_model.evaluate(node_disp)
+        reshaped_node_disp = node_disp[deformation_mesh_indices].reshape((-1,))
         reshaped_node_disp.add_name('uhat')
         shell_inputs.uhat = reshaped_node_disp
 
