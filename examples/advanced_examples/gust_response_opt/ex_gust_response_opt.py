@@ -15,7 +15,7 @@ from lsdo_airfoil.core.three_d_airfoil_aero_model import ThreeDAirfoilMLModelMak
 
 # Settings
 couple = False
-optimize = False
+optimize = True
 check_derivatives = False
 inline = True
 ML = False
@@ -24,7 +24,7 @@ element_wise_thickness = True
 
 
 # Time stepping parameters
-Nsteps = 3
+Nsteps = 5
 dt = 0.01
 T = Nsteps*dt
 
@@ -69,7 +69,13 @@ c172_wing = [#### quad mesh ####
         "c172_2106",]
 
 file_path = "./cessna_172_shell_meshes/"
-mesh_fname = file_path+c172_wing[0]
+mesh_id = 1
+if mesh_id == 0:
+    cell_tip = 386
+elif mesh_id == 1:
+    cell_tip = 1472
+
+mesh_fname = file_path+c172_wing[mesh_id]
 mass = 1000
 stress_bound = 1e8
 # strain_energy_bound = 1e8 # TODO: add this constraint by simulation results
@@ -501,7 +507,7 @@ def run_dynamic_shell(mesh_container, condition:cd.aircraft.conditions.CruiseCon
                          E=E0.value[0], nu=nu0.value[0], rho=density0.value[0], 
                          dt=dt, Nsteps=Nsteps, element_wise_thickness=element_wise_thickness)
 
-    plate_sim.set_up_tip_dofs(x_tip=[-2.67539, 5.59659, -1.13752], cell_tip=386)
+    plate_sim.set_up_tip_dofs(x_tip=[-2.67539, 5.59659, -1.13752], cell_tip=cell_tip)
 
     # run solver
     state_operation = StateOperation(plate_sim=plate_sim, record=True, path='./records/')
@@ -697,7 +703,7 @@ if optimize:
     # exit()
 
     prob = CSDLAlphaProblem(problem_name=fname, simulator=sim)
-    optimizer = PySLSQP(prob, solver_options={'maxiter':200, 'acc':1e-6})
+    optimizer = PySLSQP(prob, solver_options={'maxiter':200, 'acc':1e-4})
 
     # Solve your optimization problem
     optimizer.solve()
@@ -720,6 +726,7 @@ plate_sim.reset_solution_vectors()
 svk_res = plate_sim.SVK_residual()
 plate_sim.solve_dynamic_problem(svk_res, saving_outputs=True, PATH='sim_results/')
 # z axis is upside down in the aerodynamic model
+np.save('sim_results/disp.npy', plate_sim.tip_disp_history)
 plt.plot(np.linspace(0, T, Nsteps+1), -plate_sim.tip_disp_history)
 plt.legend(["dt="+str(dt)])
 plt.show()
