@@ -12,7 +12,7 @@ import ufl
 from mpi4py import MPI
 from dolfinx import cpp as _cpp
 from dolfinx import la
-
+import dolfinx
 from dolfinx.cpp.nls.petsc import NewtonSolver as _cpp_NewtonSolver
 
 from dolfinx.cpp.fem import pack_coefficients as _pack_coefficients

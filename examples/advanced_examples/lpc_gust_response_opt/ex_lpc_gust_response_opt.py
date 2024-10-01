@@ -7,12 +7,53 @@ import sys
 from VortexAD.core.vlm.vlm_solver import vlm_solver
 import aframe as af
 
+import aeroelastic_coupling_utils as acu
 import matplotlib.pyplot as plt
 
 # lsdo_airfoil must be cloned and installed from https://github.com/LSDOlab/lsdo_airfoil
 from lsdo_airfoil.core.three_d_airfoil_aero_model import ThreeDAirfoilMLModelMaker
-
+import lsdo_function_spaces as lfs
 from timeit import default_timer as timer
+
+from utils import (
+    load_thickness_vars, 
+    construct_bay_condition, 
+    construct_thickness_function,
+    construct_plate_condition, 
+    construct_plates, 
+    compute_buckling_loads, 
+    load_dv_values,
+    compute_curved_buckling_loads,
+    load_structural_mesh_pre,
+    load_structural_mesh_post,
+)
+# ------------------------------------------------------------------
+# ------------------------- LPC parameters -------------------------
+# ------------------------------------------------------------------
+# Parameters
+system_mass = 3754.035713          # kg
+total_boom_mass = 140.9903153      # kg
+battery_mass = 953.931603          # kg
+motor1 = 61.21710382               # kg
+motor2 = 35.38429884               # kg
+motor3 = 13.00147938               # kg
+motor4 = 11.08264674               # kg
+boom_masses = [total_boom_mass/8+battery_mass/8+motor1, # f inner
+               total_boom_mass/8+battery_mass/8+motor2, # r inner
+               total_boom_mass/8+battery_mass/8+motor3, # f outer
+               total_boom_mass/8+battery_mass/8+motor4] # r outer
+                # kg - just the right wing booms
+g = 9.81                           # m/s^2
+max_stress = 350E6                 # Pa
+max_displacement = 0.55            # m
+minimum_thickness = 0.0003         # m
+skin_thickness = 0.01              # mm
+spar_thickness = 0.001             # mm
+rib_thickness = 0.0001             # mm
+stress_cf = 1.5 # corrects softmax stress to actual stress
+
+
+
 global_start = timer()
 
 # Settings
@@ -22,47 +63,55 @@ check_derivatives = False
 inline = True
 ML = False
 trim = False
-rib_spar_dv = True
 element_wise_thickness = True
-minimize_mass = False
+add_booms = False
+#=============== without booms==================
+# Dynamic simulation wall time: 211.1955498870011
+# Tip deflection: 0.015926600973292137
+# Total strain energy: [12078.485461]
+# Mass: [418.59704621]
+#   Number of elements = 2468
+#   Number of vertices = 2291
+#   Number of degrees of freedom = 28503
+# Total run time:  289.36618438700134
+#=============== with booms==================
+# Dynamic simulation wall time: 228.00001642899952
+# Tip deflection: 0.01385799468203417
+# Total strain energy: [6294.69337779]
+# Mass: [418.59704621]
+#   Number of elements = 2468
+#   Number of vertices = 2291
+#   Number of degrees of freedom = 28503
+# Total run time:  250.6040047919996
 
-mesh_id = 1
-mass_0 = 160.26646 # unit: kg
-scaler = 1e0
-max_mass = scaler*mass_0
-
-# max strain energy is associated with T
-# Nsteps = 3
-# T = 0.03
-# max_strain_energy = 0.00073738
-# Nsteps = 10
-# T = 0.1
-# max_strain_energy = 0.035 
-# T = 0.2
-# max_strain_energy = 0.04438904
-
-Nsteps = 40
-max_strain_energy = 2346.33976596
+# Optimization settings
 max_iter = 100
+
+jax_sim = True
+minimize_mass = False
+mesh_id = 0
+# mass_0 = 298.93714513 # unit: kg
+mass_0 = 418.59704621
+max_mass = mass_0
+strain_energy_scaler = 1e-3
+mass_scaler = 1e-2
+# ------------------------------------------------------------------
+# ---------------------- Time stepping setting ---------------------
+# ------------------------------------------------------------------
 
 # Time stepping parameters
 dt = 0.005
-T = Nsteps*dt
+T = 0.2
+Nsteps = int(T/dt) # 40
+Nsteps = 40
 
-# gust velocity
+# ------------------------------------------------------------------
+# ------------------------- gust setting ---------------------------
+# ------------------------------------------------------------------
 # [Vx, Vy, Vz]
 V_inf = 50.  # freestream velocity magnitude in m/s
-
-# V_p = 5. # peak velocity of the gust
-# dt = 0.005 total strain energy = 0.14825795
-# dt = 0.002 total strain energy = 0.32829913
-
-V_p = 8. # peak velocity of the gust
-# # dt = 0.005 Nsteps = 40 total strain energy = 0.11631866
-
-# V_p = 6. # peak velocity of the gust
-# dt = 0.005 Nsteps = 40 total strain energy = 0.11631866
-
+# V_p = 50. # peak velocity of the gust
+V_p = 5. # peak velocity of the gust
 # Time-stepping parameters
 # T       = 0.5
 l_chord = 1.2 # unit: m, chord length
@@ -89,27 +138,32 @@ from femo_alpha.dynamic_rm_shell.total_strain_energy_operation import TotalStrai
 from femo_alpha.dynamic_rm_shell.volume_operation import VolumeOperation
 from femo_alpha.fea.utils_dolfinx import readFEAMesh, reconstructFEAMesh
 
-# Quantities
-skin_thickness = 0.007
-spar_thickness = 0.001
-rib_thickness = 0.001
+lpc_wing = [#### quad mesh ####
+        "left_wing_c_v2", # 2468 elements
+        "left_wing_m_v2", # 9872 elements
+        "left_wing_f_v2", # 39488 elements
+        ]
 
-c172_wing = [#### quad mesh ####
-        "c172_650",
-        "c172_2106",]
 
-file_path = "./cessna_172_shell_meshes/"
+file_path = "./data_files/"
+
+x_tip = [3.76643, 7.69544, -2.32919]
 if mesh_id == 0:
-    cell_tip = 386
+    cell_tip = 2104 # ndof: 28503
+    max_strain_energy = 4752.49776969
 elif mesh_id == 1:
-    cell_tip = 1472
+    cell_tip = 8416 
+    max_strain_energy = 6680.92315078
+elif mesh_id == 2:
+    cell_tip = 33664
 
-mesh_fname = file_path+c172_wing[mesh_id]
-
-# strain_energy_bound = 1e8 # TODO: add this constraint by simulation results
-# num_ribs = 10
-num_ribs = 6
+mesh_fname = file_path+lpc_wing[mesh_id]
+mass = 1000
+stress_bound = 1e8
 load_factor = 3
+
+num_ribs = 9
+spanwise_multiplicity = 30
 
 # Start recording
 rec = csdl.Recorder(inline=inline, debug=True)
@@ -117,48 +171,52 @@ rec.start()
 
 # Initialize CADDEE and import geometry
 caddee = cd.CADDEE()
-c172_geom = cd.import_geometry('c172.stp')
+lpc_geom = cd.import_geometry("LPC_final_custom_blades.stp", scale=cd.Units.length.foot_to_m)
 
 def define_base_config(caddee : cd.CADDEE):
-    aircraft = cd.aircraft.components.Aircraft(geometry=c172_geom)
+    aircraft = cd.aircraft.components.Aircraft(geometry=lpc_geom)
     base_config = cd.Configuration(system=aircraft)
     caddee.base_configuration = base_config
 
     airframe = aircraft.comps["airframe"] = cd.Component()
 
     # Setup wing component
-    wing_geometry = aircraft.create_subgeometry(
-        search_names=['MainWing'],
-        # The wing coming out of openVSP has some extra surfaces that we don't need
-        ignore_names=['0, 8', '0, 9', '0, 14', '0, 15', '1, 16', '1, 17', '1, 22', '1, 23']
-    )
-    wing = cd.aircraft.components.Wing(AR=1, S_ref=1, geometry=wing_geometry)
-    airframe.comps["wing"] = wing
+    top_surface_inds = [75, 79, 83, 87]
+    ignore_names = ['72', '73', '90', '91', '92', '93', '110', '111'] # rib-like surfaces
+    ignore_names += [str(i-1) for i in top_surface_inds] + [str(i+2) for i in top_surface_inds]
+    ignore_names += [str(i-1+20) for i in top_surface_inds] + [str(i+2+20) for i in top_surface_inds]
+    wing_geometry = aircraft.create_subgeometry(search_names=["Wing_1"], ignore_names=ignore_names)
+    wing = cd.aircraft.components.Wing(AR=12.12, S_ref=19.6, taper_ratio=0.2,
+                                       geometry=wing_geometry, 
+                                       tight_fit_ffd=True,
+                                       compute_surface_area=False
+                                    )
     
     # Generate internal geometry
-    wing.construct_ribs_and_spars(
-        c172_geom,
+    top_array, bottom_array = wing.construct_ribs_and_spars(
+        lpc_geom,
         num_ribs=num_ribs,
         LE_TE_interpolation="ellipse",
-        # full_length_ribs=True,
-        full_length_ribs=False,
-        spanwise_multiplicity=10,
+        plot_projections=False, 
+        export_wing_box=False,  # Set to true to export the wing box as .igs for meshing
+        export_half_wing=False,
+        full_length_ribs=True,
+        spanwise_multiplicity=spanwise_multiplicity,
+        num_rib_pts=30,
         offset=np.array([0.,0.,.15]),
-        # export_wing_box=True,
-        # export_half_wing=True,
         finite_te=True,
+        exclute_te=True,
+        return_rib_points=True,
+        spar_function_space=lfs.BSplineSpace(2, (5, 1), (100, 2)),
     )
+
+    indices = np.array([i for i in range(0, top_array.shape[-1], spanwise_multiplicity)])
+    top_array = top_array[:, indices]
+    bottom_array = bottom_array[:, indices]
+
     # wing.plot()
     # exit()
-    # extract relevant geometries
-    right_wing = wing.create_subgeometry(search_names=[''], ignore_names=[', 1, ', '_r_', '-'])
-    right_wing_oml = wing.create_subgeometry(search_names=['MainWing, 0'])
-    left_wing_oml = wing.create_subgeometry(search_names=['MainWing, 1'])
-    right_wing_spars = wing.create_subgeometry(search_names=['spar'], ignore_names=['_r_', '-'])
-    right_wing_ribs = wing.create_subgeometry(search_names=['rib'], ignore_names=['_r_', '-'])
-    wing_oml = wing.create_subgeometry(search_names=['MainWing'])
-    wing.quantities.right_wing_oml = right_wing_oml
-    wing.quantities.oml = wing_oml
+
 
     # material
     E = csdl.Variable(value=69E9, name='E')
@@ -168,60 +226,75 @@ def define_base_config(caddee : cd.CADDEE):
     aluminum = cd.materials.IsotropicMaterial(name='aluminum', E=E, G=G, 
                                                 density=density, nu=nu)
 
-    # Define thickness functions
-    # The ribs and spars have a constant thickness, while the skin has a variable thickness that we will optimize
-    thickness_fs = fs.ConstantSpace(2)
-    skin_fs = fs.BSplineSpace(2, (2,1), (5,2))
-    r_skin_fss = right_wing_oml.create_parallel_space(skin_fs)
-    skin_t_coeffs, skin_fn = r_skin_fss.initialize_function(1, value=skin_thickness)
-    if not rib_spar_dv:
-        spar_fn = fs.Function(thickness_fs, spar_thickness)
-        rib_fn = fs.Function(thickness_fs, rib_thickness)
+    t_vars = construct_thickness_function(wing, num_ribs, top_array, bottom_array, aluminum,
+                                          skin_t=skin_thickness, spar_t=spar_thickness, rib_t=rib_thickness, 
+                                          minimum_thickness=minimum_thickness)
+    # Booms
+    booms = cd.Component() # Create a parent component for all the booms
+    airframe.comps["booms"] = booms
+    boom_points = []
+    for i in range(4,8):
+        boom_geometry = aircraft.create_subgeometry(search_names=[
+            f"Rotor_{i+1}_Support",
+        ])
+        boom = cd.Component(geometry=boom_geometry)
+        boom.quantities.drag_parameters.characteristic_length = 2.4384
+        boom.quantities.drag_parameters.form_factor = 1.1
+        booms.comps[f"boom_{i+1}"] = boom
+        if i%2 == 0:
+            points = boom._ffd_block.evaluate(parametric_coordinates=np.array([[0.,0.,0.],[0.,0.,1.],[0.,1.,0.],[0.,1.,1.]]), non_csdl=True)
+        else:
+            points = boom._ffd_block.evaluate(parametric_coordinates=np.array([[1.,0.,0.],[1.,0.,1.],[1.,1.,0.],[1.,1.,1.]]), non_csdl=True)
+        boom_points.append(points)
 
-    # correlate the left and right wing skin thickness functions - want symmetry
-    oml_lr_map = {rind:lind for rind, lind in zip(right_wing_oml.functions, left_wing_oml.functions)}
-    wing.quantities.oml_lr_map = oml_lr_map
+    boom_y_ranges = []
+    for i in range(2):
+        points_0 = boom_points[2*i]
+        points_1 = boom_points[2*i+1]
+        min_y = min(np.min(points_0[:,1]), np.min(points_1[:,1]))
+        max_y = max(np.max(points_0[:,1]), np.max(points_1[:,1]))
+        boom_y_ranges.append([min_y, max_y])
 
-    # build function set out of the thickness functions
-    functions = skin_fn.functions.copy()
-    for ind in wing.geometry.functions:
-        name = wing.geometry.function_names[ind]
-        if "spar" in name:
-            if rib_spar_dv:
-                thickness = csdl.Variable(value=spar_thickness, name=name+'_thickness')
-                thickness.set_as_design_variable(upper=0.05, lower=0.0003, scaler=1e3)
-                spar_fn = fs.Function(thickness_fs, thickness)
-            functions[ind] = spar_fn
-        elif "rib" in name:
-            if rib_spar_dv:
-                thickness = csdl.Variable(value=rib_thickness, name=name+'_thickness')
-                thickness.set_as_design_variable(upper=0.05, lower=0.0003, scaler=1e3)
-                rib_fn = fs.Function(thickness_fs, thickness)
-            functions[ind] = rib_fn
 
-    for rind, lind in oml_lr_map.items():
-        # the v coord is flipped left to right
-        functions[lind] = fs.Function(skin_fs, functions[rind].coefficients[:,::-1,:])
 
-    thickness_function_set = fs.FunctionSet(functions)
-    wing.quantities.material_properties.set_material(aluminum, thickness_function_set)
+    # Set material
+    wing.quantities.material_properties.set_material(aluminum, None)
 
-    # set skin thickness as a design variable
-    skin_t_coeffs.set_as_design_variable(upper=0.05, lower=0.0001, scaler=5e2)
-    skin_t_coeffs.add_name('skin_thickness')
+    wing_oml = wing.create_subgeometry(search_names=["Wing_1"])
+    left_wing_spars = wing.create_subgeometry(search_names=["spar"], ignore_names=['_r_', '-', 'Wing_1, 1'])
+    left_wing_ribs = wing.create_subgeometry(search_names=["rib"], ignore_names=['_r_', '-', 'Wing_1, 1'])
+    left_wing_oml = wing.create_subgeometry(search_names=["Wing_1"], ignore_names=['_r_', '-', 'Wing_1, 1'])
+    wing.quantities.oml_geometry = wing_oml
+    left_wing = wing.create_subgeometry(search_names=[""], ignore_names=["Wing_1, 1", '_r_', '-'])
+    wing.quantities.left_wing = left_wing
+    wing.quantities.left_wing_oml = left_wing_oml
+    rear_spar = wing.create_subgeometry(search_names=["spar_2"], ignore_names=['_r_', '-', 'Wing_1, 1'])
+    wing.quantities.rear_spar = rear_spar
+    wing_bays = construct_plates(num_ribs, top_array, bottom_array, offset=0)
+
+
+
+    # shell meshing
+    # import shell mesh
+    shell_discritizaiton = load_structural_mesh_pre(left_wing, left_wing_oml, left_wing_ribs, left_wing_spars, 
+                                                    rear_spar, wing_bays, boom_y_ranges, mesh_fname)
+    lpc_shell_mesh = load_structural_mesh_post(shell_discritizaiton, mesh_fname)
+
+
 
     # Spaces for states
     # pressure
-    pressure_function_space = fs.IDWFunctionSpace(num_parametric_dimensions=2, order=4, grid_size=(240, 40), conserve=False)
-    indexed_pressue_function_space = wing_oml.create_parallel_space(pressure_function_space)
+    pressure_function_space = lfs.IDWFunctionSpace(num_parametric_dimensions=2, order=4, grid_size=(240, 40), conserve=False, n_neighbors=10)
+    # pressure_function_space = lfs.BSplineSpace(num_parametric_dimensions=2, degree=(1, 3), coefficients_shape=(2, 10))
+    indexed_pressue_function_space = wing.geometry.create_parallel_space(pressure_function_space)
     wing.quantities.pressure_space = indexed_pressue_function_space
 
     # displacement
-    displacement_space = fs.BSplineSpace(2, (1,1), (3,3))
+    displacement_space = lfs.IDWFunctionSpace(2, 5, grid_size=100, conserve=False)
     wing.quantities.displacement_space = wing_geometry.create_parallel_space(
                                                     displacement_space)
-    wing.quantities.oml_displacement_space = wing_oml.create_parallel_space(
-                                                    displacement_space)
+
+    airframe.comps["wing"] = wing
 
     # meshing
     mesh_container = base_config.mesh_container
@@ -235,36 +308,8 @@ def define_base_config(caddee : cd.CADDEE):
     wing_chord_surface.project_airfoil_points(oml_geometry=wing_oml)
     vlm_mesh.discretizations["wing_chord_surface"] = wing_chord_surface
     mesh_container["vlm_mesh"] = vlm_mesh
-
-
-    # shell meshing
-    # import shell mesh
-    wing_shell_mesh = cd.mesh.import_shell_mesh(
-        mesh_fname+'.msh', 
-        right_wing,
-        rescale=[1e-3, 1e-3, 1e-3],
-        grid_search_n=5,
-        priority_inds=[i for i in right_wing_oml.functions],
-        priority_eps=3e-6,
-    )
-    process_elements(wing_shell_mesh, right_wing_oml, right_wing_ribs, right_wing_spars)
-
-    nodes = wing_shell_mesh.nodal_coordinates
-    connectivity = wing_shell_mesh.connectivity
-    filename = mesh_fname+"_reconstructed.xdmf"
-    if os.path.isfile(filename):
-        wing_shell_mesh_fenics = readFEAMesh(filename)
-    else:
-        # Reconstruct the mesh using the projected nodes and connectivity
-        wing_shell_mesh_fenics = reconstructFEAMesh(filename, 
-                                                    nodes.value, connectivity)
-    # store the xdmf mesh object for shell analysis
-    wing_shell_mesh.fea_mesh = wing_shell_mesh_fenics
-
-    wing_shell_mesh_cd = cd.mesh.ShellMesh()
-    wing_shell_mesh_cd.discretizations['wing'] = wing_shell_mesh
-    mesh_container['shell_mesh'] = wing_shell_mesh_cd
-    return skin_t_coeffs
+    mesh_container['shell_mesh'] = lpc_shell_mesh
+    return t_vars
 
 def define_conditions(caddee: cd.CADDEE):
     conditions = caddee.conditions
@@ -285,60 +330,51 @@ def define_conditions(caddee: cd.CADDEE):
 def define_analysis(caddee: cd.CADDEE):
     conditions = caddee.conditions
     wing = caddee.base_configuration.system.comps["airframe"].comps["wing"]
-
+    wing_shell_mesh = caddee.base_configuration.mesh_container["shell_mesh"].discretizations['wing']
+    wing_shell_mesh_fenics = wing_shell_mesh.fea_mesh
+    nodes = wing_shell_mesh.nodal_coordinates
     # finalize meshes
     cruise:cd.aircraft.conditions.CruiseCondition = conditions["cruise"]
     cruise.finalize_meshes()
     mesh_container = cruise.configuration.mesh_container
 
-    # TODO: save the pressure history to a file
-    pressure_history_filename = mesh_fname+'_v_p_'+str(V_p)+'_dt_'+str(dt)+'_vlm_pressure_history'+'.npy'
-    implicit_disp_coeffs_filename = mesh_fname+'_v_p_'+str(V_p)+'_dt_'+str(dt)+'_implicit_disp_coeffs'+'.npy'
-    if os.path.isfile(pressure_history_filename) and False:
-        print("Loading VLM pressure history from file ...")
+
+
+    # save the pressure history to a file
+    pressure_history_filename = mesh_fname+'_v_p_'+str(V_p)+'_dt_'+str(dt)+'_pressure_history'+'.npy'
+    if os.path.isfile(pressure_history_filename):
+        print("Loading pressure history from file ...")
         pressure_history_array = np.load(pressure_history_filename)
         pressure_history = csdl.Variable(value=pressure_history_array)
-        implicit_disp_coeffs_array = np.load(implicit_disp_coeffs_filename)
-        implicit_disp_coeffs = [csdl.Variable(value=implicit_disp_coeffs_array)]
+
     else:
         # run VLM 
         # save the pressure history only for the time-dependent loads
         n_steps = int((T1+T0)/dt)
         if n_steps > Nsteps:
             n_steps = Nsteps
-        pressure_history, implicit_disp_coeffs = run_vlm_history(mesh_container, cruise, Nsteps=n_steps, dt=dt)
+        pressure_history = run_vlm_history(mesh_container, cruise, Nsteps=n_steps, dt=dt)
         pressure_history_array = pressure_history.value
         np.save(pressure_history_filename, pressure_history_array)
-        np.save(implicit_disp_coeffs_filename, implicit_disp_coeffs[0].value)
 
-    pressure_history.add_name('pressure_history')
     # Run structural analysis
     plate_sim, shell_outputs = run_dynamic_shell(mesh_container, cruise, pressure_history, 
-                                                Nsteps=Nsteps, dt=dt, rec=True)
-    # displacement, shell_outputs = run_dynamic_shell(mesh_container, cruise, pressure_history, 
-    #                                             Nsteps=1, dt=dt, rec=True)
+                                                Nsteps=Nsteps, dt=dt, rec=True, add_booms=add_booms)
     # max_stress:csdl.Variable = shell_outputs.aggregated_stress
     total_strain_energy:csdl.Variable = shell_outputs.total_strain_energy
     wing_mass:csdl.Variable = shell_outputs.mass
     displacement = shell_outputs.disp_solid
     
 
-    # [RX] this led to error: IndexError: too many indices for array: array is 2-dimensional, but 3 were indexed
-    # mirror_function(displacement, wing.quantities.oml_lr_map)
-
-    # max_stress.set_as_constraint(upper=stress_bound, scaler=1e-8)
-    # max_stress.add_name('max_stress')
-
-
     if minimize_mass:
-        wing_mass.set_as_objective(scaler=1e-2)
+        wing_mass.set_as_objective(scaler=mass_scaler)
         wing_mass.add_name('wing_mass')
-        total_strain_energy.set_as_constraint(upper=max_strain_energy, scaler=1e-3)
+        total_strain_energy.set_as_constraint(upper=max_strain_energy, scaler=strain_energy_scaler)
         total_strain_energy.add_name('total_strain_energy')
     else: 
-        total_strain_energy.set_as_objective(scaler=1e-3)
+        total_strain_energy.set_as_objective(scaler=strain_energy_scaler)
         total_strain_energy.add_name('total_strain_energy')
-        wing_mass.set_as_constraint(upper=max_mass, scaler=1e-2)
+        wing_mass.set_as_constraint(upper=max_mass, scaler=mass_scaler)
         wing_mass.add_name('wing_mass')
 
     # wing.quantities.oml_displacement = displacement
@@ -378,15 +414,15 @@ def run_vlm_history(mesh_container, condition, Nsteps=100, dt=0.01):
     V_y = 0. # span direction
 
     ti = 0.
-
     pressure_history = csdl.Variable(value=np.zeros((Nsteps+1, nodes.shape[1]*3)))
     for i in range(Nsteps+1):
         ti += dt
         V_z = V_inf*np.sin(AoA_rad)+V_g(ti) # vertical direction (gust direction)
-        vlm_outputs, implicit_disp_coeffs = run_vlm([mesh_container], [condition], 
+        vlm_outputs = run_vlm([mesh_container], [condition], 
                                                     velocities=[V_x, V_y, V_z])
         forces = vlm_outputs.surface_force[0][0]
         Cp = vlm_outputs.surface_spanwise_Cp[0][0]
+        
 
         # fit pressure function to trimmed VLM results
         # we can actually do this before the trim if we wanted, it would be updated automatically
@@ -405,39 +441,29 @@ def run_vlm_history(mesh_container, condition, Nsteps=100, dt=0.01):
         shell_pressures_vector = csdl.reshape(shell_pressures[fenics_node_indices,:], 
                                  shape=(shell_pressures.shape[0]*shell_pressures.shape[1],))
         pressure_history = pressure_history.set(csdl.slice[i,:], shell_pressures_vector)
+
         print("Step", i, "of", Nsteps, "completed")
         print("V: ", V_x, V_y, V_z)
+        # print(pressure_history.value[i,:10])
+    
 
-    return pressure_history, implicit_disp_coeffs
+    return pressure_history
+
+
+
 
 def run_vlm(mesh_containers, conditions, velocities=None):
-    # implicit displacement input
-    wing = conditions[0].configuration.system.comps["airframe"].comps["wing"]
-    displacement_space:fs.FunctionSetSpace = wing.quantities.oml_displacement_space
-    implicit_disp_coeffs = []
-    implicit_disp_fns = []
-    for i in range(len(mesh_containers)):
-        coeffs, function = displacement_space.initialize_function(3, implicit=True)
-        implicit_disp_coeffs.append(coeffs)
-        implicit_disp_fns.append(function)
 
     # set up VLM analysis
     nodal_coords = []
     nodal_vels = []
 
-    for mesh_container, condition, disp_fn in zip(mesh_containers, conditions, implicit_disp_fns):
-        transfer_mesh_para = disp_fn.generate_parametric_grid((5, 5))
-        transfer_mesh_phys = wing.geometry.evaluate(transfer_mesh_para)
-        transfer_mesh_disp = disp_fn.evaluate(transfer_mesh_para)
-        
-        wing_lattice = mesh_container["vlm_mesh"].discretizations["wing_chord_surface"]
-        wing_lattic_coords = wing_lattice.nodal_coordinates
+    for mesh_container, condition in zip(mesh_containers, conditions):
 
-        map = fs.NodalMap()
-        weights = map.evaluate(csdl.reshape(wing_lattic_coords, (np.prod(wing_lattic_coords.shape[0:-1]), 3)), transfer_mesh_phys)
-        wing_camber_mesh_displacement = (weights @ transfer_mesh_disp).reshape(wing_lattic_coords.shape)
-        
-        nodal_coords.append(wing_lattic_coords + wing_camber_mesh_displacement)
+        wing_lattice = mesh_container["vlm_mesh"].discretizations["wing_chord_surface"]
+        nodal_coords.append(wing_lattice.nodal_coordinates)
+        # nodal_vels.append(wing_lattice.nodal_velocities)
+
         if velocities is not None:
             nodal_velocities = wing_lattice.nodal_velocities
             nodal_velocities = nodal_velocities.set(csdl.slice[0,:,:,0], velocities[0])
@@ -454,7 +480,6 @@ def run_vlm(mesh_containers, conditions, velocities=None):
         nodal_coordinates = csdl.vstack(nodal_coords)
         nodal_velocities = csdl.vstack(nodal_vels)
 
-
     # Add an airfoil model
     nasa_langley_airfoil_maker = ThreeDAirfoilMLModelMaker(
         airfoil_name="ls417",
@@ -468,8 +493,6 @@ def run_vlm(mesh_containers, conditions, velocities=None):
     Cp_model = nasa_langley_airfoil_maker.get_airfoil_model(quantities=["Cp"])
     alpha_stall_model = nasa_langley_airfoil_maker.get_airfoil_model(quantities=["alpha_Cl_min_max"])
 
-
-
     vlm_outputs = vlm_solver(
         mesh_list=[nodal_coordinates],
         mesh_velocity_list=[nodal_velocities],
@@ -480,7 +503,7 @@ def run_vlm(mesh_containers, conditions, velocities=None):
         airfoil_Cp_models=[Cp_model], 
     )
 
-    return vlm_outputs, implicit_disp_coeffs
+    return vlm_outputs
 
 def fit_pressure_fn(mesh_container, condition, spanwise_Cp):
     wing = condition.configuration.system.comps["airframe"].comps["wing"]
@@ -502,22 +525,17 @@ def fit_pressure_fn(mesh_container, condition, spanwise_Cp):
 
     return pressure_function
 
-def run_dynamic_shell(mesh_container, condition:cd.aircraft.conditions.CruiseCondition, pressure_history, Nsteps=100, dt=0.01, rec=False):
+def run_dynamic_shell(mesh_container, condition:cd.aircraft.conditions.CruiseCondition, 
+                    pressure_history, Nsteps=100, dt=0.01, rec=False, add_booms=True, ):
     wing = condition.configuration.system.comps["airframe"].comps["wing"]
     
     # Shell
     pav_shell_mesh = mesh_container["shell_mesh"]
     wing_shell_mesh = pav_shell_mesh.discretizations['wing']
-    nodes = wing_shell_mesh.nodal_coordinates
-    nodes_parametric = wing_shell_mesh.nodes_parametric
     connectivity = wing_shell_mesh.connectivity
     wing_shell_mesh_fenics = wing_shell_mesh.fea_mesh
     element_centers_parametric = wing_shell_mesh.element_centers_parametric
-    oml_node_inds = wing_shell_mesh.oml_node_inds
-    oml_nodes_parametric = wing_shell_mesh.oml_nodes_parametric
-    node_disp = wing.geometry.evaluate(nodes_parametric) - nodes.reshape((-1,3))
-    
-    f_input_history = pressure_history
+    nodes = wing_shell_mesh.nodal_coordinates
 
     material = wing.quantities.material_properties.material
     element_thicknesses = wing.quantities.material_properties.evaluate_thickness(element_centers_parametric)
@@ -545,11 +563,70 @@ def run_dynamic_shell(mesh_container, condition:cd.aircraft.conditions.CruiseCon
                          E=E0.value[0], nu=nu0.value[0], rho=density0.value[0], 
                          dt=dt, Nsteps=Nsteps, element_wise_thickness=element_wise_thickness)
 
-    plate_sim.set_up_tip_dofs(x_tip=[-2.67539, 5.59659, -1.13752], cell_tip=cell_tip)
+    plate_sim.set_up_tip_dofs(x_tip=x_tip, cell_tip=cell_tip)
+
+
+    if add_booms:
+
+        # save the pressure history to a file
+        pressure_history_filename = mesh_fname+'_v_p_'+str(V_p)+'_dt_'+str(dt)+'_pressure_history_w_booms'+'.npy'
+        if os.path.isfile(pressure_history_filename):
+            print("Loading pressure history from file with booms...")
+            pressure_history_array = np.load(pressure_history_filename)
+            pressure_history = csdl.Variable(value=pressure_history_array)
+
+        else:
+
+            # apply weights from booms
+            g_factor = 1
+            boom_node_inds = wing_shell_mesh.boom_node_inds
+            boom_0_force = (boom_masses[0]+boom_masses[1])*9.81*g_factor    # positive is down
+            boom_1_force = (boom_masses[2]+boom_masses[3])*9.81*g_factor
+            boom_0_node_forces = boom_0_force/len(boom_node_inds[0])
+            boom_1_node_forces = boom_1_force/len(boom_node_inds[1])
+
+            force_boom = csdl.Variable(value=np.zeros((nodes.shape[1], 3)))
+
+            force_boom = force_boom.set(csdl.slice[boom_node_inds[0], 2], boom_0_node_forces)
+            force_boom = force_boom.set(csdl.slice[boom_node_inds[1], 2], boom_1_node_forces)
+
+
+            # # verify boom forces
+            # print("Verifying boom forces ...")
+            # print(np.sum(force_history[0,:,:].value, axis=0))
+            # print("Boom 0 force:", boom_0_force)
+            # print("Boom 1 force:", boom_1_force)
+
+            # Compute nodal pressures based on forces
+            A = plate_sim.construct_force_to_pressure_map()
+
+            fenics_mesh_indices = wing_shell_mesh_fenics.geometry.input_global_indices
+            reshaped_force_boom = csdl.reshape(force_boom[fenics_mesh_indices,:], shape=(A.shape[1],))
+            pressure_boom = csdl.solve_linear(A.toarray(), reshaped_force_boom)
+            # f_func = dolfinx.fem.Function(plate_sim.W_f)
+            # f_func.x.array[:] = reshaped_force_boom.value
+            # p_func = dolfinx.fem.Function(plate_sim.W_f)
+            # p_func.x.array[:] = pressure_boom.value
+            # xdmf_file = dolfinx.io.XDMFFile(plate_sim.comm, "sim_c_mesh/boom_forces.xdmf", "w")
+            # xdmf_file.write_mesh(plate_sim.mesh)
+            # xdmf_file.write_function(f_func)
+            # xdmf_file_p = dolfinx.io.XDMFFile(plate_sim.comm, "sim_c_mesh/boom_pressures.xdmf", "w")
+            # xdmf_file_p.write_mesh(plate_sim.mesh)
+            # xdmf_file_p.write_function(p_func)
+            # exit()
+            for i in range(pressure_history.shape[0]):
+                pressure_history = pressure_history.set(csdl.slice[i,:], pressure_history[i,:]+pressure_boom)
+
+
+            pressure_history_array = pressure_history.value
+            np.save(pressure_history_filename, pressure_history_array)
+
+    f_input_history = pressure_history
+
 
     # run solver
     state_operation = StateOperation(plate_sim=plate_sim, gradient_mode='petsc',
-                                     record=True, path='./solutions/')
+                                     record=rec, path='./solutions/')
     input_vars = csdl.VariableGroup()
 
     #:::::::::::::::::::::: Prepare the inputs :::::::::::::::::::::::::::::
@@ -684,11 +761,6 @@ def process_elements(wing_shell_mesh, right_wing_oml, right_wing_ribs, right_win
     wing_shell_mesh.oml_nodes_parametric = oml_nodes_parametric
     wing_shell_mesh.oml_el_inds = oml_inds_copy
 
-def mirror_function(displacement, oml_lr_map):
-    for rind, lind in oml_lr_map.items():
-        print(rind, lind)
-        print(displacement.functions[rind].coefficients.shape)
-        displacement.functions[lind].coefficients = displacement.functions[rind].coefficients[:,::-1,:]
 
 class HiddenPrints:
     def __enter__(self):
@@ -716,7 +788,7 @@ plate_sim, shell_outputs = define_analysis(caddee)
 csdl.save_optimization_variables()
 
 
-fname = 'structural_opt_shell_test'
+fname = 'gust_structural_opt'
 
 if check_derivatives:
     sim = csdl.experimental.PySimulator(rec)
@@ -727,19 +799,17 @@ if check_derivatives:
 if optimize:
     from modopt import CSDLAlphaProblem
     from modopt import PySLSQP, SNOPT
-    
-    # If you have a GPU, you can set gpu=True - but it may not be faster
-    # I think this is because the ml airfoil model can't be run on the GPU when Jax is using it
-    # sim = csdl.experimental.JaxSimulator(rec, gpu=False, save_on_update=True, filename=fname)
-    
-    # If you don't have jax installed, you can use the PySimulator instead (it's slower)
-    # To install jax, see https://jax.readthedocs.io/en/latest/installation.html
-    sim = csdl.experimental.PySimulator(rec)
 
-    # It's a good idea to check the totals of the simulator before running the optimizer
-    # sim.check_totals()
-    # exit()
+    if jax_sim:
+        # If you have a GPU, you can set gpu=True - but it may not be faster
+        # I think this is because the ml airfoil model can't be run on the GPU when Jax is using it
+        sim = csdl.experimental.JaxSimulator(rec, gpu=False, save_on_update=True, filename=fname)
+        
+        # If you don't have jax installed, you can use the PySimulator instead (it's slower)
+        # To install jax, see https://jax.readthedocs.io/en/latest/installation.html
 
+    else:
+        sim = csdl.experimental.PySimulator(rec)
     prob = CSDLAlphaProblem(problem_name=fname, simulator=sim)
 
     # SLSQP
@@ -760,7 +830,7 @@ if optimize:
 
 
     # # Plotting
-    # load dv values and perform an inline execution to get the final results
+    # # load dv values and perform an inline execution to get the final results
     load_dv_values(fname+'_final.hdf5', 'inline')
     # rec.execute()
     # wing = caddee.base_configuration.system.comps["airframe"].comps["wing"]
@@ -769,22 +839,11 @@ if optimize:
     # wing.quantities.oml.plot_but_good(color=wing.quantities.pressure_function)
 
 
-# # run plate_sim with optimized thickness and save dynamic displacements
+# run plate_sim with optimized thickness and save dynamic displacements
 # plate_sim.reset_solution_vectors()
 # svk_res = plate_sim.SVK_residual()
-# plate_sim.update_nsteps(int(0.5/dt))
-# plate_sim.solve_dynamic_problem(svk_res, saving_outputs=True, PATH='full_sim_results_Vp_'+str(V_p)+'/')
+# plate_sim.solve_dynamic_problem(svk_res, saving_outputs=True, PATH='sim_results/')
 
-# z axis is upside down in the aerodynamic model
-# np.save('sim_results/disp_dt_'+str(dt)+'.npy', plate_sim.tip_disp_history)
-# if optimize:
-#     np.save('sim_results/disp_dt_'+str(dt)+'_opt.npy', plate_sim.tip_disp_history)
-# else:
-#     np.save('sim_results/disp_dt_'+str(dt)+'_Vp_'+str(V_p)+'.npy', plate_sim.tip_disp_history)
-# # [RX] triggers petsc error when running matplotlib
-# plt.plot(np.linspace(0, T, Nsteps+1), -plate_sim.tip_disp_history)
-# plt.legend(["dt="+str(dt)])
-# plt.show()
 
 global_end = timer()
 print("Total run time: ", global_end-global_start)

@@ -45,6 +45,7 @@ class StateOperation(csdl.experimental.CustomImplicitOperation):
         self.debug_mode = debug_mode
         self.state_name = 'disp_history'
 
+        self.path = path
         # self.args_dict = ['thickness', 'force_vector']
         self.args_dict = ['thickness', 'force_history']
         self.input_name = 'thickness'
@@ -52,7 +53,7 @@ class StateOperation(csdl.experimental.CustomImplicitOperation):
         self.record = record
         self.eval_iter = 0
         if self.record:
-            self.thickness_recorder = dolfinx.io.XDMFFile(MPI.COMM_WORLD, path+"thickness.xdmf", "w")
+            self.thickness_recorder = dolfinx.io.XDMFFile(MPI.COMM_WORLD, path+"records/thickness.xdmf", "w")
             self.thickness_recorder.write_mesh(plate_sim.mesh)
             
         # store indices of DoFs that are defined through BCs
@@ -125,7 +126,8 @@ class StateOperation(csdl.experimental.CustomImplicitOperation):
                                                    self.eval_iter)
         self.eval_iter += 1
         sol_output = self.plate_sim.solve_dynamic_problem(svk_res,
-                                                saving_outputs=False,
+                                                saving_outputs=self.record,
+                                                PATH = self.path,
                                                 timing=True)
 
         output_vals[self.state_name] = stack_array_into_vector(sol_output)
@@ -351,7 +353,8 @@ class StateOperation(csdl.experimental.CustomImplicitOperation):
 
                         if i == 0:
                             if self.gradient_mode == 'petsc':
-                                d_outputs_list_petsc[i].zeroValues()
+                                # d_outputs_list_petsc[i].zeroValues()
+                                d_outputs_list_petsc[i].zeroEntries()
                         else:
                             # after dRdw_cur, dRdw_old and dRdwdot_old have been constructed we can set up the linear system and store relevant vectors
                             for j in range(0, i+1, 1):

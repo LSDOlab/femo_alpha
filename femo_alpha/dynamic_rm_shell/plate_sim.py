@@ -17,6 +17,8 @@ from ufl import adjoint
 from shell_analysis_fenicsx import *
 from femo_alpha.dynamic_rm_shell.nonlinear_utils import *
 
+import scipy.sparse as sp
+
 def extractTipDispDolfinx(w, x_tip=[10.,0.,0.], cell_tip=18):
     return w.sub(0).eval(x_tip, cell_tip)[-1]
 
@@ -101,7 +103,9 @@ class PlateSim(object):
         self.W_f = VectorFunctionSpace(self.mesh, ("CG", 1))
         self.f = Function(self.W_f)
         # self.f_history = np.zeros((self.time_levels, self.nn*3))
+
         self.tip_disp_history = np.zeros((self.time_levels,))
+        self.opt_iter = 0
         
         # compute "average" cell size as area/num_cells
         
@@ -143,7 +147,6 @@ class PlateSim(object):
         self.fe_dofs = self.w.vector.size
         self.num_var = self.t.vector.size
 
-        #self.dWext = -inner(self.force, self.du_mid)*dx
 
     def set_up_tip_dofs(self, x_tip, cell_tip):
         self.x_tip = x_tip
@@ -256,22 +259,27 @@ class PlateSim(object):
             w_old = np.zeros_like(w_cur)
         return w_cur, w_old, wdot_old
 
+    def update_nsteps(self, Nsteps):
+        self.Nsteps = Nsteps
+        self.time_levels = Nsteps+1
+        self.tip_disp_history = np.zeros((self.time_levels,))
+
     def solve_dynamic_problem(self, residual, saving_outputs=False, PATH=None, POD_matrix=None, POD_mean=None, timing=False):
         if timing:
             time_start = perf_counter()
-
+        
         # compute and store strain energies if plot_strainenergy==True
         if saving_outputs:
             if PATH is None:
                 PATH = "solutions/"
             strain_energy_list = np.zeros((self.time_levels,))
-            xdmf_file = XDMFFile(self.comm, PATH+"displacement.xdmf", "w")
+            xdmf_file = XDMFFile(self.comm, PATH+"sim_results/displacement.xdmf", "w")
             xdmf_file.write_mesh(self.mesh)
-            xdmf_file_force = XDMFFile(self.comm, PATH+"force.xdmf", "w")
+            xdmf_file_force = XDMFFile(self.comm, PATH+"sim_results/force.xdmf", "w")
             xdmf_file_force.write_mesh(self.mesh)
-            xdmf_file_vmstress = XDMFFile(self.comm, PATH+"von_mises_stress.xdmf", "w")
+            xdmf_file_vmstress = XDMFFile(self.comm, PATH+"sim_results/von_mises_stress.xdmf", "w")
             xdmf_file_vmstress.write_mesh(self.mesh)
-            xdmf_file_rotation = XDMFFile(self.comm, PATH+"rotation.xdmf", "w")
+            xdmf_file_rotation = XDMFFile(self.comm, PATH+"sim_results/rotation.xdmf", "w")
             xdmf_file_rotation.write_mesh(self.mesh)
 
         time = 0.0
@@ -333,8 +341,9 @@ class PlateSim(object):
             print("Dynamic simulation wall time: {}".format(time_end-time_start))
 
         if saving_outputs:
-            np.save(PATH+"strain_energy", strain_energy_list, allow_pickle=False)
-
+            np.save(PATH+"records/strain_energy_opt_"+str(self.opt_iter), strain_energy_list, allow_pickle=False)
+            np.save(PATH+"records/tip_disp_opt_"+str(self.opt_iter), self.tip_disp_history, allow_pickle=False)
+            self.opt_iter += 1
         return w_output
     
     def dRdw(self, svk_res, w_cur, w_old, wdot_old, adjoint=True):
@@ -424,6 +433,23 @@ class PlateSim(object):
         # stress on the top surface
         vm_stress = shell_stress_RM.vonMisesStress(self.t/2)
         return vm_stress
+    
+    def construct_force_to_pressure_map(self):
+        # Define variational problem for projection
+        w = TestFunction(self.W_f)
+        Pv = TrialFunction(self.W_f)
+
+        a = inner(Pv,w)*dx #lhs(res)
+        # Assemble linear system
+        A = assemble_matrix(form(a))
+        A.assemble()
+        # convert mass matrix to sparse Python array
+        A_csr = A.getValuesCSR()
+        A_sp = sp.csr_matrix((A_csr[2], A_csr[1], A_csr[0]))
+        
+        # eliminate zeros that are present in mass matrix
+        A_sp.eliminate_zeros()
+        return A_sp
 
 if __name__ == "__main__":
     comm = MPI.COMM_WORLD

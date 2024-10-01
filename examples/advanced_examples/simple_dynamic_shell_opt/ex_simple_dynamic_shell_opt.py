@@ -19,8 +19,8 @@ from femo_alpha.dynamic_rm_shell.total_strain_energy_operation import TotalStrai
 from femo_alpha.dynamic_rm_shell.volume_operation import VolumeOperation
 from femo_alpha.fea.utils_dolfinx import createCustomMeasure
 
-run_verify_forward_eval = True
-run_check_derivatives = False
+run_verify_forward_eval = False
+run_check_derivatives = True
 run_optimization = False
 element_wise_material = False
 
@@ -51,7 +51,7 @@ rho_val = 10.0
 # f_d = 5.  # force magnitude
 
 
-Nsteps  = 100
+Nsteps  = 2
 
 
 # # Time-stepping parameters
@@ -121,7 +121,7 @@ else:
     thickness = csdl.Variable(value=h_val*np.ones(nn), name='thickness')
 
 
-state_operation = StateOperation(plate_sim=plate_sim, gradient_mode='numpy',
+state_operation = StateOperation(plate_sim=plate_sim, gradient_mode='petsc',
                                 # debug_mode=True,
                                 record=True, path='./records/')
 input_vars = csdl.VariableGroup()

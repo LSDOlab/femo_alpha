@@ -34,7 +34,8 @@ class TotalStrainEnergyOperation(csdl.CustomExplicitOperation):
 
         self.args_dict = ['thickness', 'disp_history']
         self.output_name = 'total_strain_energy'
-        
+        self.regularization = False
+
     def evaluate(self, inputs: csdl.VariableGroup):
         # assign method inputs to input dictionary
         for arg_name in self.args_dict:
@@ -63,13 +64,14 @@ class TotalStrainEnergyOperation(csdl.CustomExplicitOperation):
         Total_StrainEnergy = 0.
         for i in range(0, self.plate_sim.time_levels):
             self.plate_sim.set_solution_vector(self.plate_sim.w, w_array[:, i])
-            total_strain_energy = assemble_scalar(form(self.compute_total_strain_energy()))
-            # Total_StrainEnergy += self.plate_sim.assembleStrainEnergy(self.plate_sim.w)
-            Total_StrainEnergy += total_strain_energy
+            Total_StrainEnergy += self.plate_sim.assembleStrainEnergy(self.plate_sim.w)
 
         # add regularization term
-        regularization = assemble_scalar(form(self.compute_regularization(self.plate_sim.time_levels)))
+        if self.regularization:
+            regularization = assemble_scalar(form(self.compute_regularization(self.plate_sim.time_levels)))
         #*self.spline_sim.spline_h**2\
+        else:
+            regularization = 0.
         output_vals['total_strain_energy'] = Total_StrainEnergy + regularization
 
         # print("COMPUTED COMPLIANCE, VALUE: {}".format(Total_StrainEnergy))
@@ -108,12 +110,13 @@ class TotalStrainEnergyOperation(csdl.CustomExplicitOperation):
 
 
         # add derivative of regularization w.r.t. thickness
-        regularization = self.compute_regularization(self.plate_sim.time_levels)
-        dRegdt = assemble_vector(form(ufl.derivative(regularization, self.plate_sim.t)))
+        if self.regularization:
+            regularization = self.compute_regularization(self.plate_sim.time_levels)
+            dRegdt = assemble_vector(form(ufl.derivative(regularization, self.plate_sim.t)))
 
-        # print("dRegdt: {}".format(dRegdt.array))
+            # print("dRegdt: {}".format(dRegdt.array))
 
-        dEdt_arr += dRegdt.array
+            dEdt_arr += dRegdt.array
 
         # reshape dEdw_arr into a vector
         dEdw_arr = stack_array_into_vector(dEdw_arr)
@@ -122,7 +125,8 @@ class TotalStrainEnergyOperation(csdl.CustomExplicitOperation):
         derivatives[self.output_name, 'disp_history'] = dEdw_arr
 
     def compute_total_strain_energy(self):
-        total_strain_energy = dot(self.plate_sim.w, self.plate_sim.w)*self.plate_sim.element.dx_inplane
+        # total_strain_energy = dot(self.plate_sim.w, self.plate_sim.w)*self.plate_sim.element.dx_inplane
+        total_strain_energy = self.plate_sim.constructStrainEnergy(self.plate_sim.w)
         return total_strain_energy
 
     def compute_regularization(self, num_timesteps):
