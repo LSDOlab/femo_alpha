@@ -207,7 +207,7 @@ class NewtonSolver(_cpp_NewtonSolver):
         """
         super().setP(P, Pmat)
 
-def solveNonlinear_mod(F, w, bcs, abs_tol=1e-50, max_it=3, log=False):
+def solveNonlinear_mod(F, w, bcs, abs_tol=1e-50, max_it=1, log=False):
 
     """
     Wrap up the nonlinear solver for the problem F(w)=0 and
@@ -219,6 +219,7 @@ def solveNonlinear_mod(F, w, bcs, abs_tol=1e-50, max_it=3, log=False):
     # Set the initial guess of the solution
     with w.vector.localForm() as w_local:
         w_local.set(0.1)
+        
     solver = NewtonSolver(MPI.COMM_WORLD, problem)
     if log is True:
         dolfinx.log.set_log_level(dolfinx.log.LogLevel.INFO)

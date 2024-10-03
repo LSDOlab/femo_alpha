@@ -327,6 +327,7 @@ def construct_thickness_function(wing, num_ribs, top_array, bottom_array, materi
             spar_num += 1
     if t_vars is None:
         return t_out
+    
 
 def construct_plate_condition(upper, lower, forward, backward, ind):
     if upper == 1:

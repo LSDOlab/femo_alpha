@@ -27,6 +27,8 @@ from utils import (
     load_structural_mesh_pre,
     load_structural_mesh_post,
 )
+
+
 # ------------------------------------------------------------------
 # ------------------------- LPC parameters -------------------------
 # ------------------------------------------------------------------
@@ -42,7 +44,7 @@ boom_masses = [total_boom_mass/8+battery_mass/8+motor1, # f inner
                total_boom_mass/8+battery_mass/8+motor2, # r inner
                total_boom_mass/8+battery_mass/8+motor3, # f outer
                total_boom_mass/8+battery_mass/8+motor4] # r outer
-                # kg - just the right wing booms
+                # kg - just the left wing booms
 g = 9.81                           # m/s^2
 max_stress = 350E6                 # Pa
 max_displacement = 0.55            # m
@@ -56,59 +58,58 @@ stress_cf = 1.5 # corrects softmax stress to actual stress
 
 global_start = timer()
 
+# ------------------------------------------------------------------
+# ---------------------- Time stepping setting ---------------------
+# ------------------------------------------------------------------
+
+# # Time stepping parameters
+# dt = 0.005
+# T = 0.2
+
+# Time stepping parameters
+dt = 0.005
+T = 1
+
+# Active Settings
+optimize = False
+check_derivatives = False
+minimize_max_disp = True
+rho_max = 300
+max_iter = 100
+Nsteps = int(T/dt)
+warm_start = True
+
 # Settings
 couple = False
-optimize = True
-check_derivatives = False
 inline = True
 ML = False
 trim = False
 element_wise_thickness = True
-add_booms = False
-#=============== without booms==================
-# Dynamic simulation wall time: 211.1955498870011
-# Tip deflection: 0.015926600973292137
-# Total strain energy: [12078.485461]
-# Mass: [418.59704621]
-#   Number of elements = 2468
-#   Number of vertices = 2291
-#   Number of degrees of freedom = 28503
-# Total run time:  289.36618438700134
-#=============== with booms==================
-# Dynamic simulation wall time: 228.00001642899952
-# Tip deflection: 0.01385799468203417
-# Total strain energy: [6294.69337779]
-# Mass: [418.59704621]
-#   Number of elements = 2468
-#   Number of vertices = 2291
-#   Number of degrees of freedom = 28503
-# Total run time:  250.6040047919996
 
-# Optimization settings
-max_iter = 100
+add_booms = True
+add_self_weight = True
 
-jax_sim = True
+record = True
+panel_thickness = True
+
+jax_sim = False
 minimize_mass = False
+
+
 mesh_id = 0
 # mass_0 = 298.93714513 # unit: kg
 mass_0 = 418.59704621
 max_mass = mass_0
 strain_energy_scaler = 1e-3
 mass_scaler = 1e-2
-# ------------------------------------------------------------------
-# ---------------------- Time stepping setting ---------------------
-# ------------------------------------------------------------------
 
-# Time stepping parameters
-dt = 0.005
-T = 0.2
-Nsteps = int(T/dt) # 40
-Nsteps = 40
 
 # ------------------------------------------------------------------
 # ------------------------- gust setting ---------------------------
 # ------------------------------------------------------------------
 # [Vx, Vy, Vz]
+
+AoA = 0.  # Angle of Attack in degrees
 V_inf = 50.  # freestream velocity magnitude in m/s
 # V_p = 50. # peak velocity of the gust
 V_p = 5. # peak velocity of the gust
@@ -169,6 +170,26 @@ spanwise_multiplicity = 30
 rec = csdl.Recorder(inline=inline, debug=True)
 rec.start()
 
+
+# disp_history = csdl.Variable(value=np.load('disp_history.npy'))
+# max_disp_scaler = csdl.Variable(value=1/np.max(np.abs(disp_history.value)))
+# for rho in [1., 10., 100, 200, 300, 400]:
+#     print("rho:", rho)
+#     max_disp = csdl.maximum(csdl.absolute(scaler*disp_history), rho=rho)/scaler
+#     print("csdl max disp:",max_disp.value)
+# max_disp_numpy = np.max(np.abs(disp_history.value))
+# print("numpy max disp:",max_disp_numpy)
+
+# scaler = csdl.Variable(value=1/np.max(np.abs(disp_history.value)))
+# for rho in [1., 10., 100, 200, 300, 400]:
+#     print("rho:", rho)
+#     max_disp = csdl.maximum(csdl.absolute(scaler*disp_history), rho=rho)/scaler
+#     print("csdl max disp:",max_disp.value)
+# max_disp_numpy = np.max(np.abs(disp_history.value))
+# print("numpy max disp:",max_disp_numpy)
+
+# exit()
+
 # Initialize CADDEE and import geometry
 caddee = cd.CADDEE()
 lpc_geom = cd.import_geometry("LPC_final_custom_blades.stp", scale=cd.Units.length.foot_to_m)
@@ -226,9 +247,83 @@ def define_base_config(caddee : cd.CADDEE):
     aluminum = cd.materials.IsotropicMaterial(name='aluminum', E=E, G=G, 
                                                 density=density, nu=nu)
 
-    t_vars = construct_thickness_function(wing, num_ribs, top_array, bottom_array, aluminum,
-                                          skin_t=skin_thickness, spar_t=spar_thickness, rib_t=rib_thickness, 
-                                          minimum_thickness=minimum_thickness)
+
+    # Set material
+    wing.quantities.material_properties.set_material(aluminum, None)
+
+    wing_oml = wing.create_subgeometry(search_names=["Wing_1"])
+    right_wing_spars = wing.create_subgeometry(search_names=["spar"], ignore_names=['_r_', '-', 'Wing_1, 1'])
+    right_wing_ribs = wing.create_subgeometry(search_names=["rib"], ignore_names=['_r_', '-', 'Wing_1, 1'])
+    right_wing_oml = wing.create_subgeometry(search_names=["Wing_1"], ignore_names=['_r_', '-', 'Wing_1, 1'])
+
+    wing.quantities.oml_geometry = wing_oml
+    right_wing = wing.create_subgeometry(search_names=[""], ignore_names=["Wing_1, 1", '_r_', '-'])
+    wing.quantities.right_wing = right_wing
+    wing.quantities.right_wing_oml = right_wing_oml
+    rear_spar = wing.create_subgeometry(search_names=["spar_2"], ignore_names=['_r_', '-', 'Wing_1, 1'])
+    wing.quantities.rear_spar = rear_spar
+    wing_bays = construct_plates(num_ribs, top_array, bottom_array, offset=0)
+
+    if panel_thickness:
+        skin_t_coeffs = construct_thickness_function(wing, num_ribs, top_array, bottom_array, aluminum,
+                                            skin_t=skin_thickness, spar_t=spar_thickness, rib_t=rib_thickness, 
+                                            minimum_thickness=minimum_thickness)
+
+
+    else:
+        # continuous thickness
+        # The ribs and spars have a constant thickness, while the skin has a variable thickness that we will optimize
+        left_wing_oml = wing.create_subgeometry(search_names=['Wing_1'], ignore_names=['_r_', '-', 'Wing_1, 0'])
+
+        rib_spar_dv = True
+        thickness_fs = fs.ConstantSpace(2)
+        skin_fs = fs.BSplineSpace(2, (2,1), (5,2))
+        r_skin_fss = right_wing_oml.create_parallel_space(skin_fs)
+        skin_t_coeffs, skin_fn = r_skin_fss.initialize_function(1, value=skin_thickness)
+        if not rib_spar_dv:
+            spar_fn = fs.Function(thickness_fs, spar_thickness)
+            rib_fn = fs.Function(thickness_fs, rib_thickness)
+
+        # correlate the left and right wing skin thickness functions - want symmetry
+        oml_lr_map = {rind:lind for rind, lind in zip(right_wing_oml.functions, left_wing_oml.functions)}
+        wing.quantities.oml_lr_map = oml_lr_map
+
+        # build function set out of the thickness functions
+        functions = skin_fn.functions.copy()
+        for ind in wing.geometry.functions:
+            name = wing.geometry.function_names[ind]
+            if "spar" in name:
+                if rib_spar_dv:
+                    spar_thickness_var = csdl.Variable(value=spar_thickness, name=name+'_thickness')
+                    spar_thickness_var.set_as_design_variable(upper=0.05, lower=minimum_thickness, scaler=1e3)
+                    spar_fn = fs.Function(thickness_fs, spar_thickness_var)
+                functions[ind] = spar_fn
+            elif "rib" in name:
+                if rib_spar_dv:
+                    rib_thickness_var = csdl.Variable(value=rib_thickness, name=name+'_thickness')
+                    rib_thickness_var.set_as_design_variable(upper=0.05, lower=minimum_thickness, scaler=1e3)
+                    rib_fn = fs.Function(thickness_fs, rib_thickness_var)
+                functions[ind] = rib_fn
+
+        for rind, lind in oml_lr_map.items():
+            # the v coord is flipped left to right
+            functions[lind] = fs.Function(skin_fs, functions[rind].coefficients[:,::-1,:])
+
+        thickness_function_set = fs.FunctionSet(functions)
+        wing.quantities.material_properties.set_material(aluminum, thickness_function_set)
+
+        # set skin thickness as a design variable
+        # skin_0 = 0.001*np.arange(1, skin_t_coeffs.value.shape[0]+1)
+
+        # skin_t_coeffs.set_value(skin_0.reshape(-1,1))
+        skin_t_coeffs.set_as_design_variable(upper=0.05, lower=minimum_thickness, scaler=1e3)
+        skin_t_coeffs.add_name('skin_thickness')
+        # print("skin_t_coeffs:", skin_t_coeffs.value)
+        # print("spar_fn:", spar_thickness_var.value)
+        # print("rib_fn:", rib_thickness_var.value)
+        # exit()
+
+
     # Booms
     booms = cd.Component() # Create a parent component for all the booms
     airframe.comps["booms"] = booms
@@ -256,31 +351,13 @@ def define_base_config(caddee : cd.CADDEE):
         boom_y_ranges.append([min_y, max_y])
 
 
-
-    # Set material
-    wing.quantities.material_properties.set_material(aluminum, None)
-
-    wing_oml = wing.create_subgeometry(search_names=["Wing_1"])
-    left_wing_spars = wing.create_subgeometry(search_names=["spar"], ignore_names=['_r_', '-', 'Wing_1, 1'])
-    left_wing_ribs = wing.create_subgeometry(search_names=["rib"], ignore_names=['_r_', '-', 'Wing_1, 1'])
-    left_wing_oml = wing.create_subgeometry(search_names=["Wing_1"], ignore_names=['_r_', '-', 'Wing_1, 1'])
-    wing.quantities.oml_geometry = wing_oml
-    left_wing = wing.create_subgeometry(search_names=[""], ignore_names=["Wing_1, 1", '_r_', '-'])
-    wing.quantities.left_wing = left_wing
-    wing.quantities.left_wing_oml = left_wing_oml
-    rear_spar = wing.create_subgeometry(search_names=["spar_2"], ignore_names=['_r_', '-', 'Wing_1, 1'])
-    wing.quantities.rear_spar = rear_spar
-    wing_bays = construct_plates(num_ribs, top_array, bottom_array, offset=0)
-
-
-
     # shell meshing
     # import shell mesh
-    shell_discritizaiton = load_structural_mesh_pre(left_wing, left_wing_oml, left_wing_ribs, left_wing_spars, 
+    shell_discritizaiton = load_structural_mesh_pre(right_wing, right_wing_oml, right_wing_ribs, right_wing_spars, 
                                                     rear_spar, wing_bays, boom_y_ranges, mesh_fname)
     lpc_shell_mesh = load_structural_mesh_post(shell_discritizaiton, mesh_fname)
 
-
+    process_elements(lpc_shell_mesh.discretizations['wing'], right_wing_oml, right_wing_ribs, right_wing_spars)
 
     # Spaces for states
     # pressure
@@ -307,9 +384,11 @@ def define_base_config(caddee : cd.CADDEE):
     )
     wing_chord_surface.project_airfoil_points(oml_geometry=wing_oml)
     vlm_mesh.discretizations["wing_chord_surface"] = wing_chord_surface
+
     mesh_container["vlm_mesh"] = vlm_mesh
     mesh_container['shell_mesh'] = lpc_shell_mesh
-    return t_vars
+
+    return skin_t_coeffs
 
 def define_conditions(caddee: cd.CADDEE):
     conditions = caddee.conditions
@@ -341,7 +420,10 @@ def define_analysis(caddee: cd.CADDEE):
 
 
     # save the pressure history to a file
-    pressure_history_filename = mesh_fname+'_v_p_'+str(V_p)+'_dt_'+str(dt)+'_pressure_history'+'.npy'
+    if AoA == 0:
+        pressure_history_filename = mesh_fname+'_v_p_'+str(V_p)+'_dt_'+str(dt)+'_pressure_history'+'.npy'
+    else:
+        pressure_history_filename = mesh_fname+'_v_p_'+str(V_p)+'_dt_'+str(dt)+'_pressure_history_AoA_'+str(AoA)+'.npy'
     if os.path.isfile(pressure_history_filename):
         print("Loading pressure history from file ...")
         pressure_history_array = np.load(pressure_history_filename)
@@ -359,18 +441,25 @@ def define_analysis(caddee: cd.CADDEE):
 
     # Run structural analysis
     plate_sim, shell_outputs = run_dynamic_shell(mesh_container, cruise, pressure_history, 
-                                                Nsteps=Nsteps, dt=dt, rec=True, add_booms=add_booms)
+                                                Nsteps=Nsteps, dt=dt, record=record, add_booms=add_booms)
     # max_stress:csdl.Variable = shell_outputs.aggregated_stress
     total_strain_energy:csdl.Variable = shell_outputs.total_strain_energy
     wing_mass:csdl.Variable = shell_outputs.mass
-    displacement = shell_outputs.disp_solid
-    
+    displacement = shell_outputs.disp_solid # last iteration displacement
+    max_disp = shell_outputs.max_disp
+
+
 
     if minimize_mass:
         wing_mass.set_as_objective(scaler=mass_scaler)
         wing_mass.add_name('wing_mass')
         total_strain_energy.set_as_constraint(upper=max_strain_energy, scaler=strain_energy_scaler)
         total_strain_energy.add_name('total_strain_energy')
+    elif minimize_max_disp:
+        max_disp.set_as_objective(scaler=1e2)
+        max_disp.add_name('max_disp')
+        wing_mass.set_as_constraint(upper=max_mass, scaler=mass_scaler)
+        wing_mass.add_name('wing_mass')
     else: 
         total_strain_energy.set_as_objective(scaler=strain_energy_scaler)
         total_strain_energy.add_name('total_strain_energy')
@@ -407,7 +496,6 @@ def run_vlm_history(mesh_container, condition, Nsteps=100, dt=0.01):
     oml_node_inds = wing_shell_mesh.oml_node_inds
     oml_nodes_parametric = wing_shell_mesh.oml_nodes_parametric
     
-    AoA = 0.  # Angle of Attack in degrees
     AoA_rad = np.deg2rad(AoA)  # Angle of Attack converted to radians
 
     V_x = V_inf*np.cos(AoA_rad) # chord direction (flight direction)
@@ -526,7 +614,7 @@ def fit_pressure_fn(mesh_container, condition, spanwise_Cp):
     return pressure_function
 
 def run_dynamic_shell(mesh_container, condition:cd.aircraft.conditions.CruiseCondition, 
-                    pressure_history, Nsteps=100, dt=0.01, rec=False, add_booms=True, ):
+                    pressure_history, Nsteps=100, dt=0.01, record=False, add_booms=True, ):
     wing = condition.configuration.system.comps["airframe"].comps["wing"]
     
     # Shell
@@ -561,15 +649,20 @@ def run_dynamic_shell(mesh_container, condition:cd.aircraft.conditions.CruiseCon
     plate_sim = PlateSim(wing_shell_mesh_fenics, 
                          custom_bc_func=clamped_boundary,
                          E=E0.value[0], nu=nu0.value[0], rho=density0.value[0], 
-                         dt=dt, Nsteps=Nsteps, element_wise_thickness=element_wise_thickness)
+                         dt=dt, Nsteps=Nsteps, element_wise_thickness=element_wise_thickness,
+                         add_self_weight=add_self_weight,
+                         g_factor=1.)
 
     plate_sim.set_up_tip_dofs(x_tip=x_tip, cell_tip=cell_tip)
 
 
     if add_booms:
-
-        # save the pressure history to a file
-        pressure_history_filename = mesh_fname+'_v_p_'+str(V_p)+'_dt_'+str(dt)+'_pressure_history_w_booms'+'.npy'
+        if AoA == 0:
+            # save the pressure history to a file
+            pressure_history_filename = mesh_fname+'_v_p_'+str(V_p)+'_dt_'+str(dt)+'_pressure_history_w_booms'+'.npy'
+        else:
+            # save the pressure history to a file
+            pressure_history_filename = mesh_fname+'_v_p_'+str(V_p)+'_dt_'+str(dt)+'_pressure_history_w_booms_AoA_'+str(AoA)+'.npy'
         if os.path.isfile(pressure_history_filename):
             print("Loading pressure history from file with booms...")
             pressure_history_array = np.load(pressure_history_filename)
@@ -625,8 +718,12 @@ def run_dynamic_shell(mesh_container, condition:cd.aircraft.conditions.CruiseCon
 
 
     # run solver
-    state_operation = StateOperation(plate_sim=plate_sim, gradient_mode='petsc',
-                                     record=rec, path='./solutions/')
+    if optimize:
+        state_operation = StateOperation(plate_sim=plate_sim, gradient_mode='petsc',
+                                        record=record, path='./solutions/')
+    else:
+        state_operation = StateOperation(plate_sim=plate_sim, gradient_mode='petsc',
+                                        record=record, path='./sim_dt_'+str(dt)+'/')
     input_vars = csdl.VariableGroup()
 
     #:::::::::::::::::::::: Prepare the inputs :::::::::::::::::::::::::::::
@@ -655,11 +752,35 @@ def run_dynamic_shell(mesh_container, condition:cd.aircraft.conditions.CruiseCon
     mass = volume*density0
     mass.add_name('mass')
 
+
+    
+    # disp_extraction_mats = plate_sim.nodal_disp_map
+    # # Both vector or tensors need to be numpy arrays
+    # shape = plate_sim.mesh.geometry.x.shape
+    # # contains nodal displacements only (CG1)
+    # nodal_disp_vec = csdl.sparse.matvec(disp_extraction_mats, displacement)
+    # nodal_disp_mat = csdl.transpose(csdl.reshape(nodal_disp_vec, shape=(shape[1],shape[0])))
+
+    # # reorder the matrix to match the importing mesh node indices
+    # # FEniCS --> CADDEE
+    # fenics_mesh_indices = plate_sim.mesh.geometry.input_global_indices
+    # reverse_fenics_mesh_indices = np.argsort(fenics_mesh_indices).tolist()
+    # reordered_nodal_disp_mat = nodal_disp_mat[reverse_fenics_mesh_indices,:]
+
+    scaler = csdl.Variable(value=1/np.max(plate_sim.tip_disp_history))
+    max_disp = csdl.maximum(csdl.absolute(scaler*disp_history), rho=rho_max)/scaler
+    print("csdl max disp:",max_disp.value)
+    max_disp_numpy = np.max(np.abs(disp_history.value))
+    print("numpy max disp:",max_disp_numpy)
+
+
     shell_outputs = csdl.VariableGroup()
     shell_outputs.thickness = input_vars.thickness
     shell_outputs.disp_solid = disp_history[-plate_sim.fe_dofs:]
     shell_outputs.total_strain_energy = total_strain_energy
     shell_outputs.mass = mass
+    shell_outputs.max_disp = max_disp
+
 
     # # fit displacement function
     # oml_displacement_space:fs.FunctionSetSpace = wing.quantities.oml_displacement_space
@@ -679,7 +800,11 @@ def run_dynamic_shell(mesh_container, condition:cd.aircraft.conditions.CruiseCon
 
         print("Tip deflection:", max(abs(u_mid)))
         print("Total strain energy:", total_strain_energy.value)
+        print("Average strain energy:", total_strain_energy.value/(Nsteps))
         print("Mass:", mass.value)
+        print("Max displacement:", max_disp.value)
+        print("Max displacement (numpy):", np.max(np.abs(disp_history.value)))
+        print("Max displacement (fenics):", np.max(plate_sim.tip_disp_history))
         # print("Aggregated stress:", aggregated_stress.value)
         # print("Von Mises stress:", max(von_mises.value))
 
@@ -689,7 +814,7 @@ def run_dynamic_shell(mesh_container, condition:cd.aircraft.conditions.CruiseCon
 
     return plate_sim, shell_outputs
 
-def process_elements(wing_shell_mesh, right_wing_oml, right_wing_ribs, right_wing_spars):
+def process_elements(wing_shell_mesh, left_wing_oml, left_wing_ribs, left_wing_spars):
     """
     Process the elements of the shell mesh to determine the type of element (rib, spar, skin)
     """
@@ -699,9 +824,9 @@ def process_elements(wing_shell_mesh, right_wing_oml, right_wing_ribs, right_win
 
     # figure out type of surface each element is (rib/spar/skin)
     grid_n = 20
-    oml_errors = np.linalg.norm(right_wing_oml.evaluate(right_wing_oml.project(nodes.value, grid_search_density_parameter=grid_n, plot=False), non_csdl=True) - nodes.value, axis=1)
-    rib_errors = np.linalg.norm(right_wing_ribs.evaluate(right_wing_ribs.project(nodes.value, grid_search_density_parameter=grid_n, plot=False), non_csdl=True) - nodes.value, axis=1)
-    spar_errors = np.linalg.norm(right_wing_spars.evaluate(right_wing_spars.project(nodes.value, grid_search_density_parameter=grid_n, plot=False), non_csdl=True) - nodes.value, axis=1)
+    oml_errors = np.linalg.norm(left_wing_oml.evaluate(left_wing_oml.project(nodes.value, grid_search_density_parameter=grid_n, plot=False), non_csdl=True) - nodes.value, axis=1)
+    rib_errors = np.linalg.norm(left_wing_ribs.evaluate(left_wing_ribs.project(nodes.value, grid_search_density_parameter=grid_n, plot=False), non_csdl=True) - nodes.value, axis=1)
+    spar_errors = np.linalg.norm(left_wing_spars.evaluate(left_wing_spars.project(nodes.value, grid_search_density_parameter=grid_n, plot=False), non_csdl=True) - nodes.value, axis=1)
 
     element_centers = np.array([np.mean(nodes.value[connectivity[i].astype(int)], axis=0) for i in range(connectivity.shape[0])])
 
@@ -729,9 +854,9 @@ def process_elements(wing_shell_mesh, right_wing_oml, right_wing_ribs, right_win
         else:
             raise ValueError('Error in determining element type')
 
-    oml_centers = right_wing_oml.project(element_centers[oml_inds], grid_search_density_parameter=5, plot=False, force_reprojection=True)
-    rib_centers = right_wing_ribs.project(element_centers[rib_inds], grid_search_density_parameter=5, plot=False, force_reprojection=True)
-    spar_centers = right_wing_spars.project(element_centers[spar_inds], grid_search_density_parameter=5, plot=False, force_reprojection=True)
+    oml_centers = left_wing_oml.project(element_centers[oml_inds], grid_search_density_parameter=5, plot=False, force_reprojection=True)
+    rib_centers = left_wing_ribs.project(element_centers[rib_inds], grid_search_density_parameter=5, plot=False, force_reprojection=True)
+    spar_centers = left_wing_spars.project(element_centers[spar_inds], grid_search_density_parameter=5, plot=False, force_reprojection=True)
     oml_inds_copy = oml_inds.copy()
 
     for i in range(connectivity.shape[0]):
@@ -756,7 +881,7 @@ def process_elements(wing_shell_mesh, right_wing_oml, right_wing_ribs, right_win
             if not n_ind in oml_node_inds:
                 oml_node_inds.append(n_ind)
 
-    oml_nodes_parametric = right_wing_oml.project(nodes.value[oml_node_inds], grid_search_density_parameter=5)
+    oml_nodes_parametric = left_wing_oml.project(nodes.value[oml_node_inds], grid_search_density_parameter=5)
     wing_shell_mesh.oml_node_inds = oml_node_inds
     wing_shell_mesh.oml_nodes_parametric = oml_nodes_parametric
     wing_shell_mesh.oml_el_inds = oml_inds_copy
@@ -790,10 +915,21 @@ csdl.save_optimization_variables()
 
 fname = 'gust_structural_opt'
 
+if warm_start:
+    # load_dv_values(fname+'_outputs/opt_1/'+fname+'_final.hdf5', 'inline')
+    # load_dv_values(fname+'_outputs/opt_2_w_booms_w_gravity/'+fname+'_final.hdf5', 'inline')
+    load_dv_values(fname+'_outputs/opt_3_w_booms_wo_gravity_aoa_2/'+fname+'_final.hdf5', 'inline')
+
+
 if check_derivatives:
     sim = csdl.experimental.PySimulator(rec)
-    sim.check_totals([shell_outputs.total_strain_energy],[skin_t_coeffs])
-    # sim.check_totals([aggregated_stress],[force_vector])
+    if type(skin_t_coeffs) is dict:
+        skin_t_coeffs_list = [skin_t_coeffs[k] for k in skin_t_coeffs.keys()]
+        # sim.check_totals([shell_outputs.total_strain_energy],skin_t_coeffs_list)
+        sim.check_totals([shell_outputs.max_disp],skin_t_coeffs_list)
+    else:
+        # sim.check_totals([shell_outputs.total_strain_energy],[skin_t_coeffs])
+        sim.check_totals([shell_outputs.max_disp],skin_t_coeffs)
 
 
 if optimize:
@@ -822,7 +958,6 @@ if optimize:
     #             'Major feasibility': 1e-8
     #             }
     # optimizer = SNOPT(prob, solver_options=snopt_options)
-
     # Solve your optimization problem
     optimizer.solve()
     optimizer.print_results()
@@ -832,6 +967,21 @@ if optimize:
     # # Plotting
     # # load dv values and perform an inline execution to get the final results
     load_dv_values(fname+'_final.hdf5', 'inline')
+    print("Loading DVs...")
+    for name in skin_t_coeffs.keys():
+        if "upper_wing_thickness" in name:
+            print(name, skin_t_coeffs[name].value)
+    for name in skin_t_coeffs.keys():
+        if "lower_wing_thickness" in name:
+            print(name, skin_t_coeffs[name].value)    
+    for name in skin_t_coeffs.keys():
+        if "spar" in name:
+            print(name, skin_t_coeffs[name].value)
+    for name in skin_t_coeffs.keys():
+        if "rib" in name:
+            print(name, skin_t_coeffs[name].value)
+    print("total number of DVs:", len(skin_t_coeffs.keys()))
+    # exit()
     # rec.execute()
     # wing = caddee.base_configuration.system.comps["airframe"].comps["wing"]
     # mesh = wing.quantities.oml.plot_but_good(color=wing.quantities.material_properties.thickness)

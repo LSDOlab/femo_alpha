@@ -16,7 +16,7 @@ from ufl import adjoint
 # from petsc4py import PETSc
 from shell_analysis_fenicsx import *
 from femo_alpha.dynamic_rm_shell.nonlinear_utils import *
-
+import basix
 import scipy.sparse as sp
 
 def extractTipDispDolfinx(w, x_tip=[10.,0.,0.], cell_tip=18):
@@ -63,7 +63,7 @@ class PlateSim(object):
     isogeometric shell.
     """
     def __init__(self, mesh, E, nu, rho, dt, Nsteps, element_wise_thickness=False,
-                custom_bc_func=None, 
+                custom_bc_func=None, add_self_weight=False, g_factor=None,
                 quad_deg=3, comm=MPI.COMM_WORLD):
         self.mesh = mesh
         self.E = E
@@ -142,10 +142,13 @@ class PlateSim(object):
 
         self.bc_obj = BC_list(self.W, custom_bc_func=custom_bc_func)
         self.bc_list = self.bc_obj.return_bc_list()
-
+        self.add_self_weight = add_self_weight
+        self.g_factor = g_factor
 
         self.fe_dofs = self.w.vector.size
         self.num_var = self.t.vector.size
+
+        # self.nodal_disp_map = self.construct_nodal_disp_map()
 
 
     def set_up_tip_dofs(self, x_tip, cell_tip):
@@ -196,8 +199,19 @@ class PlateSim(object):
 
         # Inertial contribution to the residual:
         dWmass = elastic_model.inertialResidual(self.rho,self.t,self.uddot,self.thetaddot)
-        # TODO: Add weight force (dependent on design parameters)?
-        res = dWmass + dWint_mid
+
+        # Add weight force 
+        if self.add_self_weight:
+            if self.g_factor is None:
+                g_factor = -1.0 # assume in negative z-direction
+            else:
+                g_factor = self.g_factor
+            g = Constant(self.mesh, g_factor*9.81)
+            f_d = ufl.as_vector([0.,0.,self.rho*self.t*g])
+            dWext = inner(f_d,self.du_mid)*dx
+        else:
+            dWext = 0.0
+        res = dWmass + dWint_mid - dWext
         return res
 
     def constructStrainEnergy(self, w):
@@ -450,6 +464,89 @@ class PlateSim(object):
         # eliminate zeros that are present in mass matrix
         A_sp.eliminate_zeros()
         return A_sp
+    
+    def construct_nodal_disp_map(self):
+        deriv_us_to_ua_coord_list = []
+        Q_map = self.construct_CG2_CG1_interpolation_map()
+        disp_extraction_mats = self.construct_disp_extraction_mats()
+        for i in range(3):
+            deriv_us_to_ua_coord_list += [sp.csr_matrix(
+                                            Q_map@disp_extraction_mats[i])]
+        disp_extraction_mats = sp.vstack(deriv_us_to_ua_coord_list)
+        # print(disp_extraction_mats.shape)
+        return disp_extraction_mats
+
+    def construct_disp_extraction_mats(self):
+        # first we construct the extraction matrix for all displacements
+        disp_space, solid_disp_idxs = self.W.sub(0).collapse()
+        num_disp_dofs = len(solid_disp_idxs)
+        solid_rot_idxs = self.W.sub(1).collapse()[1]
+        num_rot_dofs = len(solid_rot_idxs)
+        # __init__ sparse mapping matrix
+        disp_mat = sp.lil_matrix((num_disp_dofs, num_disp_dofs+num_rot_dofs))
+        # set relevant entries to 1
+        disp_mat[list(range(num_disp_dofs)), solid_disp_idxs] = 1
+        # convert sparse matrix to CSR format (for faster matrix-vector products)
+        disp_mat.tocsr()
+
+        # afterwards we generate the extraction matrices for the 3 displacement components
+        disp_component_extraction_mats = []
+        for i in range(3):
+            solid_disp_coord_idxs = disp_space.sub(i).collapse()[1]
+            num_disp_coord_dofs = len(solid_disp_coord_idxs)
+            # __init__ sparse mapping matrix
+            disp_coord_mat = sp.lil_matrix((num_disp_coord_dofs, disp_mat.shape[0]))
+            # set relevant entries to 1
+            disp_coord_mat[list(range(num_disp_coord_dofs)), solid_disp_coord_idxs] = 1
+            # convert sparse matrix to CSR format (for faster matrix-vector products)
+            disp_coord_mat.tocsr()
+
+            # we multiply each coordinate extraction matrix with the displacement extraction matrix
+            disp_coord_mat = disp_coord_mat@disp_mat
+
+            disp_component_extraction_mats += [disp_coord_mat]
+
+        return disp_component_extraction_mats
+
+    def construct_CG2_CG1_interpolation_map(self):
+        CG2_space = self.W.sub(0).collapse()[0]
+        phys_coord_array = self.mesh.geometry.x
+        mesh_bbt = dolfinx.geometry.BoundingBoxTree(self.mesh,
+                                                    self.mesh.topology.dim)
+
+        # create basix element
+        ct = basix.cell.string_to_type(self.mesh.topology.cell_type.name)
+        c_element = basix.create_element(basix.ElementFamily.P, ct, 2,
+                                        basix.LagrangeVariant.equispaced)
+        num_cg2_dofs = CG2_space.tabulate_dof_coordinates().shape[0]
+
+        for i in range(self.mesh.topology.index_map(0).size_local):
+            x_point = np.array(phys_coord_array[i, :])
+            x_point_eval = self.eval_fe_basis_all_dolfinx(x_point,
+                                CG2_space.dofmap.list, mesh_bbt, c_element, i,
+                                mat_shape=(self.mesh.geometry.x.shape[0], num_cg2_dofs))
+            if i == 0:
+                sample_mat = x_point_eval
+            else:
+                sample_mat += x_point_eval
+
+        return sample_mat
+
+    def eval_fe_basis_all_dolfinx(self, x, dofmap_adjacencylist, mesh_bbt, basix_element, x_idx, mat_shape):
+        mesh_cur = self.mesh
+        cell_candidates = dolfinx.geometry.compute_collisions(mesh_bbt, x)
+        cell_ids = dolfinx.geometry.compute_colliding_cells(mesh_cur, cell_candidates, x)
+        geom_dofs = dofmap_adjacencylist.links(cell_ids[0])
+        cell_vertex_ids = mesh_cur.geometry.dofmap.links(cell_ids[0])
+        x_ref = mesh_cur.geometry.cmap.pull_back(x[None, :], mesh_cur.geometry.x[cell_vertex_ids])
+
+        c_tab = basix_element.tabulate(0, x_ref)[0, 0, :, 0]
+        # NOTE: c_tab contains the DoF values on the cell cell_ids[0]; geom_dofs contains their global DoF numbers
+
+        # basis_vec = np.zeros((mesh_cur.geometry.dofmap.num_nodes,))
+        basis_vec = sp.csr_array((c_tab, (c_tab.shape[0]*[int(x_idx)], geom_dofs)), shape=mat_shape)
+
+        return basis_vec
 
 if __name__ == "__main__":
     comm = MPI.COMM_WORLD

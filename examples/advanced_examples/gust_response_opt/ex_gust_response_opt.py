@@ -17,7 +17,7 @@ global_start = timer()
 
 # Settings
 couple = False
-optimize = True
+optimize = False
 check_derivatives = False
 inline = True
 ML = False
