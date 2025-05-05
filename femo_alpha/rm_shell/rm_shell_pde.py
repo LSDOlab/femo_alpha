@@ -22,7 +22,7 @@ class RMShellPDE:
     '''
     Class for the PDE of the Reissner-Mindlin shell element and essential outputs
     '''
-    def __init__(self, mesh, element_wise_material=False):
+    def __init__(self, mesh, element_wise_material=False, elementwise_pressure=False):
         self.mesh = mesh
         element_type = "CG2CG1"
         #element_type = "CG2CR1"
@@ -33,11 +33,16 @@ class RMShellPDE:
         self.dx_inplane, self.dx_shear = element.dx_inplane, element.dx_shear
 
         self.W  = self.element.W
+        self.element_wise_material = element_wise_material
         if element_wise_material:
             self.VT = FunctionSpace(mesh, ("DG", 0))
         else:
             self.VT = FunctionSpace(mesh, ("CG", 1))
-        self.VF = VectorFunctionSpace(mesh, ("CG", 1))
+        if elementwise_pressure:
+            self.VF = VectorFunctionSpace(mesh, ("DG", 0))
+        else:
+            self.VF = VectorFunctionSpace(mesh, ("CG", 1))
+        self.VU = VectorFunctionSpace(mesh, ("CG", 1))
         self.bf_sup_sizes = assemble_vector(
                 form(TestFunction(self.VF.sub(0).collapse()[0])*dx)).getArray()
         # self.bf_sup_sizes = np.ones_like(self.bf_sup_sizes)
@@ -48,11 +53,18 @@ class RMShellPDE:
                                                 w, uhat, material_model.CLT)
         elastic_energy = elastic_model.elasticEnergy(E, h,
                                     self.dx_inplane,self.dx_shear)
-        return elastic_model.weakFormResidual(elastic_energy, f,
+        res = elastic_model.weakFormResidual(elastic_energy, f,
                                             penalty=penalty, dss=dss, dSS=dSS, g=g)
+        return res
+        # # Inertia relief
+        # f_d = ufl.as_vector([0.,0.,-rho*h*g])
+        # res -= inner(f_d,elastic_model.du_mid)*J(uhat)*dx
+        # return res
 
     def regularization(self, h, type=None):
-        alpha1 = Constant(self.mesh, 1e1)
+        # alpha1 = Constant(self.mesh, 1e1)
+        # alpha2 = Constant(self.mesh, 1e0)
+        alpha1 = Constant(self.mesh, 1e-2)
         alpha2 = Constant(self.mesh, 1e0)
         h_mesh = CellDiameter(self.mesh)
 
@@ -71,7 +83,14 @@ class RMShellPDE:
         return regularization
 
     def compliance(self,u_mid,uhat,h,f):
-        return inner(u_mid,f)*J(uhat)*ufl.dx + self.regularization(h, type='L2')
+        if self.element_wise_material:
+            return inner(u_mid,u_mid)*J(uhat)*ufl.dx + self.regularization(h, type='L2')
+        else:
+            return inner(u_mid,u_mid)*J(uhat)*ufl.dx + self.regularization(h, type='H1')
+        # if self.element_wise_material:
+        #     return inner(u_mid,f)*J(uhat)*ufl.dx + self.regularization(h, type='L2')
+        # else:
+        #     return inner(u_mid,f)*J(uhat)*ufl.dx + self.regularization(h, type='H1')
     
     def tip_disp(self,u_mid,uhat,dxx):
         return Constant(self.mesh, 0.5)*inner(u_mid,u_mid)*J(uhat)*dxx

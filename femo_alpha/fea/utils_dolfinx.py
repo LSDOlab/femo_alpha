@@ -653,7 +653,14 @@ import meshio
 def reconstructFEAMesh(filename, nodes, connectivity):
     # Generate cells (connectivity)
     # This is a placeholder, replace with your actual cell data
-    cells = [('triangle', np.array(connectivity))]
+
+    if connectivity.shape[1] == 4:
+        cells = [('quad', np.array(connectivity))]
+    elif connectivity.shape[1] == 3:
+        cells = [('triangle', np.array(connectivity))]
+    else:
+        raise ValueError('Invalid cell shape--should be either triangular or quadrilateral')
+
     # Write the mesh data to an XDMF file
     mesh = meshio.Mesh(nodes, cells)
     meshio.write(filename, mesh)
