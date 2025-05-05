@@ -36,7 +36,6 @@ class RMShellModel:
                             additional_outputs=None,
                             mesh_tags=None,
                             record=True,
-                            rho=100
                             elementwise_pressure=False):
         '''
         Parameters:
