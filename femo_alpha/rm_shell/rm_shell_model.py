@@ -16,20 +16,40 @@ class RMShellModel:
     Class for the RM shell model for aircraft optimization
     ------------------------------------------------------
     Args:
+    
     mesh: dolfinx.mesh object for the shell mesh
     shell_bc_func: callable for shell Dirichlet BC locations - returns True if 
                     it is the boundary location, otherwise returns False
     record: boolean to record the FEA model variables in xdmf format
     '''
-    def __init__(self, mesh: dolfinx.mesh, mesh_tags=None, association_table=None,
+    def __init__(self, mesh: dolfinx.mesh,
                             shell_bc_func: callable=None, 
                             element_wise_material=False,
                             PENALTY_BC=True,
+                            additional_outputs=None,
+                            mesh_tags=None,
                             record=True,
                             rho=100):
+        '''
+        Parameters:
+        -----------
+        mesh: dolfinx.mesh object for the shell mesh
+        shell_bc_func: callable for shell Dirichlet BC locations - returns True if
+                        it is the boundary location, otherwise returns False
+        element_wise_material: boolean to indicate if the material properties are
+                                defined element-wise or node-wise
+        PENALTY_BC: boolean to indicate if the penalty method is used for the
+                        Dirichlet BC
+        additional_outputs: dictionary of callable functions to compute additional
+                            scalar outputs for the shell model {name:(function, tags)}
+        mesh_tags: dictionary {tag: [inds]} where inds are the indicies of elements under
+                    the tag. No duplucate indices.
+        record: boolean to record the FEA model variables in xdmf format
+        rho: float, density of the shell material
+        '''
         self.mesh = mesh
         self.mesh_tags = mesh_tags
-        self.association_table = association_table
+        self.additional_outputs = additional_outputs
         self.shell_bc_func = shell_bc_func # shell bc information
         self.element_wise_material = element_wise_material
         self.record = record
@@ -68,7 +88,38 @@ class RMShellModel:
 
 
     def set_up_subdomains(self, mesh_tags):
-        self.dxx = ufl.Measure('dx', domain=self.mesh, subdomain_data=mesh_tags)
+        '''
+        Convert mesh tags to dolfinx mesh tags and set up the measure.
+        Creates self.dxx, which is a dolfinx mesh tag measure for the shell model.
+        Also creates self.association_table, which is a dictionary that maps the
+        meshtag indices to the input tags.
+
+        Parameters:
+        -----------
+        mesh_tags: dictionary {tag: [inds]} where inds are the indicies of elements under
+                    the tag. No duplucate indices.
+        '''
+
+        # maps from the external fea element inds to the internal fea element inds 
+        cd2fe_el = np.argsort(self.mesh.topology.original_cell_index)
+
+        # need to make vals, which is an array of length num_elements, where vals[i] is the
+        # index of the tag of the i-th element (or -1 if no tag)
+        vals = -np.ones(cd2fe_el.shape[0], dtype=np.int32)
+        for i, inds in enumerate(mesh_tags.values()):
+            vals[inds] = i
+
+        # print(vals)
+        # exit()
+
+        # association table allows us to map the input tags to the meshtag indices
+        self.association_table = {key:i for i, key in enumerate(mesh_tags.keys())}
+
+        # create the mesh tags
+        meshtags_fea = dolfinx.mesh.meshtags(self.mesh, 2, cd2fe_el, vals.astype(np.int32))
+
+        # create the measure
+        self.dxx = measure = ufl.Measure('dx', domain=self.mesh, subdomain_data=meshtags_fea)
 
     def set_up_fea(self):
         '''
@@ -176,35 +227,44 @@ class RMShellModel:
                         vtk=True)
         
 
-        if self.association_table is not None:
-            for _, subdomain in enumerate(self.association_table):
-                i = self.association_table[subdomain]
+        if self.mesh_tags is not None:
+            for tag, i in self.association_table.items():
                 if i == -1:
                     continue
-                stress_sums = shell_pde.sum_stress_subdomain(
-                                w,uhat,h,E,nu,self.dxx(i))
-                area_form = shell_pde.area_subdomain(uhat, self.dxx(i))
-                fea.add_output(name='sum_stress_x_'+str(i),
-                            form=stress_sums[0],
+                # Automatically add pnorm stress for each subdomain
+                pnorm_i_stress_form = shell_pde.pnorm_stress(
+                        w,uhat,h,E,nu,
+                        self.dxx(i),m=self.m,rho=self.rho,
+                        alpha=None,regularization=False)
+                fea.add_output(name='pnorm_stress_'+str(tag),
+                            form=pnorm_i_stress_form,
                             arguments=['thickness','disp_solid','E', 'nu','uhat'])
-                fea.add_output(name='sum_stress_y_'+str(i),
-                            form=stress_sums[1],
-                            arguments=['thickness','disp_solid','E', 'nu','uhat'])
-                fea.add_output(name='sum_stress_z_'+str(i),
-                            form=stress_sums[2],
-                            arguments=['thickness','disp_solid','E', 'nu','uhat'])
-                fea.add_output(name='sum_stress_xy_'+str(i),
-                            form=stress_sums[3],
-                            arguments=['thickness','disp_solid','E', 'nu','uhat'])
-                fea.add_output(name='sum_stress_xz_'+str(i),
-                            form=stress_sums[4],
-                            arguments=['thickness','disp_solid','E', 'nu','uhat'])
-                fea.add_output(name='sum_stress_yz_'+str(i),
-                            form=stress_sums[5],
-                            arguments=['thickness','disp_solid','E', 'nu','uhat'])
-                fea.add_output(name='area_'+str(i),
-                            form=area_form,
-                            arguments=['uhat'])
+
+
+                # stress_sums = shell_pde.sum_stress_subdomain(
+                #                 w,uhat,h,E,nu,self.dxx(i))
+                # area_form = shell_pde.area_subdomain(uhat, self.dxx(i))
+                # fea.add_output(name='sum_stress_x_'+str(i),
+                #             form=stress_sums[0],
+                #             arguments=['thickness','disp_solid','E', 'nu','uhat'])
+                # fea.add_output(name='sum_stress_y_'+str(i),
+                #             form=stress_sums[1],
+                #             arguments=['thickness','disp_solid','E', 'nu','uhat'])
+                # fea.add_output(name='sum_stress_z_'+str(i),
+                #             form=stress_sums[2],
+                #             arguments=['thickness','disp_solid','E', 'nu','uhat'])
+                # fea.add_output(name='sum_stress_xy_'+str(i),
+                #             form=stress_sums[3],
+                #             arguments=['thickness','disp_solid','E', 'nu','uhat'])
+                # fea.add_output(name='sum_stress_xz_'+str(i),
+                #             form=stress_sums[4],
+                #             arguments=['thickness','disp_solid','E', 'nu','uhat'])
+                # fea.add_output(name='sum_stress_yz_'+str(i),
+                #             form=stress_sums[5],
+                #             arguments=['thickness','disp_solid','E', 'nu','uhat'])
+                # fea.add_output(name='area_'+str(i),
+                #             form=area_form,of the following is a correct use of the calc()
+                #             arguments=['uhat'])
 
             
         self.fea = fea
@@ -291,26 +351,28 @@ class RMShellModel:
         aggregated_stress.add_name('aggregated_stress')
         shell_outputs.aggregated_stress = aggregated_stress
 
-        if self.association_table is not None:
-            for _, subdomain in enumerate(self.association_table):
-                i = self.association_table[subdomain]
+        if self.mesh_tags is not None:
+            for tag, i in self.association_table.items():
                 if i == -1:
                     continue
-                sum_stress_x_i = getattr(shell_outputs, 'sum_stress_x_'+str(i))
-                sum_stress_y_i = getattr(shell_outputs, 'sum_stress_y_'+str(i))
-                sum_stress_z_i = getattr(shell_outputs, 'sum_stress_z_'+str(i))
-                sum_stress_xy_i = getattr(shell_outputs, 'sum_stress_xy_'+str(i))
-                sum_stress_xz_i = getattr(shell_outputs, 'sum_stress_xz_'+str(i))
-                sum_stress_yz_i = getattr(shell_outputs, 'sum_stress_yz_'+str(i))
-                area_i = getattr(shell_outputs, 'area_'+str(i))
-                average_stress_x_i = sum_stress_x_i/area_i
-                average_stress_y_i = sum_stress_y_i/area_i
-                average_stress_z_i = sum_stress_z_i/area_i
-                average_stress_xy_i = sum_stress_xy_i/area_i
-                average_stress_xz_i = sum_stress_xz_i/area_i
-                average_stress_yz_i = sum_stress_yz_i/area_i
-                setattr(shell_outputs, 'average_stress_'+str(i), [average_stress_x_i, average_stress_y_i, average_stress_z_i, 
-                                                                  average_stress_xy_i, average_stress_xz_i, average_stress_yz_i])
+                pnorm_i_stress = getattr(shell_outputs, 'pnorm_stress_'+str(tag))
+                setattr(shell_outputs, 'pnorm_stress_'+str(tag), pnorm_i_stress)
+                
+                # sum_stress_x_i = getattr(shell_outputs, 'sum_stress_x_'+str(i))
+                # sum_stress_y_i = getattr(shell_outputs, 'sum_stress_y_'+str(i))
+                # sum_stress_z_i = getattr(shell_outputs, 'sum_stress_z_'+str(i))
+                # sum_stress_xy_i = getattr(shell_outputs, 'sum_stress_xy_'+str(i))
+                # sum_stress_xz_i = getattr(shell_outputs, 'sum_stress_xz_'+str(i))
+                # sum_stress_yz_i = getattr(shell_outputs, 'sum_stress_yz_'+str(i))
+                # area_i = getattr(shell_outputs, 'area_'+str(i))
+                # average_stress_x_i = sum_stress_x_i/area_i
+                # average_stress_y_i = sum_stress_y_i/area_i
+                # average_stress_z_i = sum_stress_z_i/area_i
+                # average_stress_xy_i = sum_stress_xy_i/area_i
+                # average_stress_xz_i = sum_stress_xz_i/area_i
+                # average_stress_yz_i = sum_stress_yz_i/area_i
+                # setattr(shell_outputs, 'average_stress_'+str(i), [average_stress_x_i, average_stress_y_i, average_stress_z_i, 
+                #                                                   average_stress_xy_i, average_stress_xz_i, average_stress_yz_i])
 
         print('RM shell model evaluation completed.')
         print('-'*40)

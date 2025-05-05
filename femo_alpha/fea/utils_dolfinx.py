@@ -653,7 +653,7 @@ import meshio
 def reconstructFEAMesh(filename, nodes, connectivity):
     # Generate cells (connectivity)
     # This is a placeholder, replace with your actual cell data
-    cells = [('quad', np.array(connectivity))]
+    cells = [('triangle', np.array(connectivity))]
     # Write the mesh data to an XDMF file
     mesh = meshio.Mesh(nodes, cells)
     meshio.write(filename, mesh)
