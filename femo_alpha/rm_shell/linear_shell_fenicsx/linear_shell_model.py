@@ -385,6 +385,10 @@ class ShellStressRM:
         self.D = (E/(1.0 - nu*nu))*as_matrix([[1.0,  nu,   0.0         ],
                                      [nu,   1.0,  0.0         ],
                                      [0.0,  0.0,  0.5*(1.0-nu)]])
+        
+        self.E012 = as_matrix([[E0[i] for i in range(0,3)],
+                               [E1[i] for i in range(0,3)],
+                               [E2[i] for i in range(0,3)]])
 
     def u(self, xi2):
         '''
@@ -434,6 +438,19 @@ class ShellStressRM:
         # in-plane stresses
         sigma_hat = self.D*self.eps(xi2)
         return (sigma_hat, sigma_shear)
+
+    def inplaneStress(self, xi2):
+        '''
+        Computes the in-plane stress as a 3x3 matrix in global coordinates at xi2
+        '''
+        sigma_hat, _ = self.cauchyStresses(xi2) # [sigma_uu, sigma_vv, tau_uv]
+        sigma_hat_3d = as_matrix([[sigma_hat[0], sigma_hat[2], 0],
+                                  [sigma_hat[2], sigma_hat[1], 0],
+                                  [0, 0, 0]])
+        # now just transform into global coordinate system
+        i,j,k,l = indices(4)
+        sigma = as_tensor(self.E012[i,k]*sigma_hat_3d[k,l]*self.E012[j,l], (i,j))
+        return sigma
 
     def vonMisesStress(self, xi2):
         '''

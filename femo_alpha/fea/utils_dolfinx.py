@@ -653,7 +653,6 @@ import meshio
 def reconstructFEAMesh(filename, nodes, connectivity):
     # Generate cells (connectivity)
     # This is a placeholder, replace with your actual cell data
-    print(connectivity.shape)
 
     if connectivity.shape[1] == 4:
         cells = [('quad', np.array(connectivity))]
